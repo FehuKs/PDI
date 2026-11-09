@@ -1,5 +1,7 @@
 package src.filtros;
 
+import src.core.Images;
+
 import java.awt.image.BufferedImage;
 
 public class Brilho {
@@ -7,8 +9,10 @@ public class Brilho {
     private static final int MAX_RGB = 255;
     private static final int MIN_RGB = 0;
 
-   
+
     public BufferedImage aplicarBrilho(BufferedImage originalImage, int brilho) {
+        Images.require(originalImage);
+        if (brilho < -255 || brilho > 255) throw new IllegalArgumentException("Brilho deve estar entre -255 e 255.");
         int width = originalImage.getWidth();
         int height = originalImage.getHeight();
 
@@ -17,7 +21,7 @@ public class Brilho {
         }
 
         // Cria uma nova imagem vazia com as mesmas dimensões e tipo
-        BufferedImage resultImage = new BufferedImage(width, height, originalImage.getType());
+        BufferedImage resultImage = Images.like(originalImage);
 
         // Itera sobre cada canal RGB (R=0, G=1, B=2) e cada pixel
         for (int x = 0; x < width; x++) {
@@ -35,7 +39,7 @@ public class Brilho {
                 int newB = limitPixelValue(b + brilho);
 
                 // Reconstroi o valor RGB com os canais ajustados
-                int newRGB = (newR << 16) | (newG << 8) | newB;
+                int newRGB = (rgb & 0xff000000) | (newR << 16) | (newG << 8) | newB;
 
                 // Define o novo valor ajustado na imagem de resultado
                 resultImage.setRGB(x, y, newRGB);

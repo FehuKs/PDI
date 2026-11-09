@@ -1,5 +1,7 @@
 package src.filtros;
 
+import src.core.Images;
+
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 
@@ -8,7 +10,7 @@ public class FiltrodaMediana {
     public BufferedImage aplicarFiltroMediana(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
-        BufferedImage resultImage = new BufferedImage(width, height, image.getType());
+        BufferedImage resultImage = Images.like(image);
 
         for (int c = 0; c < 3; c++) { // Assumindo que estamos lidando com RGB (3 canais)
             for (int x = 0; x < width; x++) {

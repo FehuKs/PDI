@@ -1,5 +1,9 @@
 package src.desafio;
 
+import src.core.Images;
+import src.infra.CvScope;
+import src.core.AnalysisResult;
+
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
 
@@ -21,9 +25,6 @@ import java.util.Map;
 
 public class AnalisadorBarras {
 
-    static {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-    }
 
     private static final int    NORM          = 32;
     private static final int    MARGEM        = 6;
@@ -35,11 +36,10 @@ public class AnalisadorBarras {
     // Tolerância vertical para considerar um dígito "na mesma linha" do topo da barra
     private static final int TOL_Y = 30;
 
-    @SuppressWarnings("unused")
     private final Grayscale grayscale;
     private final Limiarizacao limiarizacao;
 
-    private static Map<Character, Mat> templatesDigitos;
+    private static Map<Character, byte[]> templatesDigitos;
 
     public AnalisadorBarras(Grayscale g, Limiarizacao l) {
         this.grayscale    = g;
@@ -48,14 +48,24 @@ public class AnalisadorBarras {
 
     // Método principal
 
-    public String analisar(BufferedImage image) {
+    public String analisar(BufferedImage image) { return evaluate(image).summary(); }
+
+    public AnalysisResult evaluate(BufferedImage image) {
+        Images.require(image);
+        try (CvScope resources = CvScope.open()) {
+            return analisarInternal(image);
+        }
+    }
+
+    private AnalysisResult analisarInternal(BufferedImage image) {
         Mat bgr = toMat(image);
         Mat bin = binarizar(image, bgr);
 
         // Segmentação: todos os blobs
         List<MatOfPoint> contornos = new ArrayList<>();
-        Imgproc.findContours(bin.clone(), contornos, new Mat(),
+        Imgproc.findContours(CvScope.track(bin.clone()), contornos, CvScope.track(new Mat()),
             Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        contornos.forEach(CvScope::track);
 
         int imgW = bin.cols();
         int imgH = bin.rows();
@@ -81,7 +91,7 @@ public class AnalisadorBarras {
             blobs.add(r);
         }
 
-        if (blobs.isEmpty()) return "Nenhuma barra identificada";
+        if (blobs.isEmpty()) return new AnalysisResult(AnalysisResult.Status.NOT_FOUND, "Nenhuma barra identificada", java.util.Map.of());
 
         // Linha de base
         int base = 0;
@@ -110,7 +120,7 @@ public class AnalisadorBarras {
                 digitos.add(r);
             }
         }
-        if (barras.isEmpty()) return "Nenhuma barra identificada";
+        if (barras.isEmpty()) return new AnalysisResult(AnalysisResult.Status.NOT_FOUND, "Nenhuma barra identificada", java.util.Map.of());
 
         // ── MUDANÇA: separa dígitos da LEGENDA (esquerda das barras)
         //            dos dígitos de RÓTULO (acima/dentro das barras)
@@ -140,30 +150,33 @@ public class AnalisadorBarras {
 
         // ── Lê o valor de cada barra: primeiro tenta rótulo acima da barra,
         //    depois faz fallback para a legenda do eixo Y.
-        int valorMaior = lerRotuloDaBarra(bin, barraMaior, digitosRotulo);
-        if (valorMaior == 0) {
+        Integer valorMaior = lerRotuloDaBarra(bin, barraMaior, digitosRotulo);
+        if (valorMaior == null) {
             valorMaior = lerLegendaNoTopoY(bin, barraMaior.y, digitosLegenda, base);
         }
 
         // Se todas as barras têm a mesma altura, barraMenor == barraMaior.
         // Nesse caso, reutiliza o valorMaior já calculado para o menor.
-        int valorMenor;
+        Integer valorMenor;
         if (barraMenor.y == barraMaior.y) {
             valorMenor = valorMaior;
         } else {
             valorMenor = lerRotuloDaBarra(bin, barraMenor, digitosRotulo);
-            if (valorMenor == 0) {
+            if (valorMenor == null) {
                 valorMenor = lerLegendaNoTopoY(bin, barraMenor.y, digitosLegenda, base);
             }
         }
 
-        return "Maior = " + valorMaior + " | Menor = " + valorMenor;
+        String maximum = valorMaior == null ? "indeterminado" : valorMaior.toString();
+        String minimum = valorMenor == null ? "indeterminado" : valorMenor.toString();
+        return new AnalysisResult(valorMaior == null || valorMenor == null ? AnalysisResult.Status.INCONCLUSIVE : AnalysisResult.Status.IDENTIFIED,
+                "Maior = " + maximum + " | Menor = " + minimum, java.util.Map.of("maximum", maximum, "minimum", minimum));
     }
 
     // lerRotuloDaBarra
     // Verifica os dígitos posicionados diretamente sobre a largura da barra
-    
-    private int lerRotuloDaBarra(Mat bin, Rect barra, List<Rect> digitosRotulo) {
+
+    private Integer lerRotuloDaBarra(Mat bin, Rect barra, List<Rect> digitosRotulo) {
         List<Rect> digitosDaBarra = new ArrayList<>();
         int barraCentroX = barra.x + barra.width / 2;
 
@@ -171,12 +184,13 @@ public class AnalisadorBarras {
             int cx = d.x + d.width / 2;
             // Se o centro horizontal do dígito estiver contido na largura da barra
             // (A tolerância de 20 pixels acomoda números mais largos que barras finas)
-            if (Math.abs(cx - barraCentroX) <= (barra.width / 2) + 20) {
+            if (Math.abs(cx - barraCentroX) <= (barra.width / 2) + 20
+                    && Math.abs((d.y + d.height) - barra.y) <= TOL_Y) {
                 digitosDaBarra.add(d);
             }
         }
 
-        if (digitosDaBarra.isEmpty()) return 0;
+        if (digitosDaBarra.isEmpty()) return null;
 
         // Ordena os dígitos da esquerda para a direita para compor números com 2+ dígitos
         digitosDaBarra.sort(Comparator.comparingInt(r -> r.x));
@@ -193,7 +207,7 @@ public class AnalisadorBarras {
     // 2. Se não encontrar: interpola entre os dois marcadores vizinhos
     //    (um acima e um abaixo do topoY).
     // ===================================================================
-    private int lerLegendaNoTopoY(Mat bin, int topoY, List<Rect> digitosLegenda, int baseY) {
+    private Integer lerLegendaNoTopoY(Mat bin, int topoY, List<Rect> digitosLegenda, int baseY) {
 
         // Passo 1 — busca direta na linha do topo da barra
         List<Rect> naLinha = new ArrayList<>();
@@ -211,6 +225,8 @@ public class AnalisadorBarras {
         // Agrupa dígitos da legenda por linha Y (dígitos do mesmo número)
         List<int[]> marcadores = agruparMarcadores(bin, digitosLegenda);
 
+        if (marcadores.isEmpty()) return null;
+
         // Adiciona âncora base (valor 0 na linha de base)
         marcadores.add(new int[]{0, baseY});
         marcadores.sort(Comparator.comparingInt(p -> p[1])); // topo→base
@@ -223,9 +239,9 @@ public class AnalisadorBarras {
             else if (abaixo == null) abaixo = m;
         }
 
-        if (acima == null && abaixo != null) return abaixo[0];
-        if (abaixo == null && acima != null) return acima[0];
-        if (acima == null)                   return 0;
+        if (acima == null && abaixo != null) return null;
+        if (abaixo == null && acima != null) return null;
+        if (acima == null)                   return null;
 
         // Interpolação linear
         int posA = acima[1],  valA = acima[0];
@@ -266,7 +282,8 @@ public class AnalisadorBarras {
         List<int[]> marcadores = new ArrayList<>();
         for (List<Rect> linha : linhas) {
             linha.sort(Comparator.comparingInt(r -> r.x));
-            int valor = reconhecerNumero(bin, linha);
+            Integer valor = reconhecerNumero(bin, linha);
+            if (valor == null) continue;
             int somaY = 0;
             for (Rect d : linha) somaY += d.y + d.height / 2;
             int centroY = somaY / linha.size();
@@ -277,7 +294,7 @@ public class AnalisadorBarras {
 
     // reconhecerNumero — reconhece dígitos de uma lista de blobs (esq→dir)
 
-    private int reconhecerNumero(Mat bin, List<Rect> digitos) {
+    private Integer reconhecerNumero(Mat bin, List<Rect> digitos) {
         StringBuilder numero = new StringBuilder();
         for (Rect d : digitos) {
             int x = Math.max(0, d.x);
@@ -285,65 +302,61 @@ public class AnalisadorBarras {
             int w = Math.min(bin.cols() - x, d.width);
             int h = Math.min(bin.rows() - y, d.height);
             if (w <= 0 || h <= 0) continue;
-            Mat glifo = new Mat(bin, new Rect(x, y, w, h));
+            Mat glifo = CvScope.track(new Mat(bin, new Rect(x, y, w, h)));
             Mat norm  = normalizarGlifo(glifo);
             char dig  = classificarDigito(norm);
-            if (dig != '?') numero.append(dig);
+            if (dig == '?') return null;
+            numero.append(dig);
         }
-        if (numero.length() == 0) return 0;
+        if (numero.length() == 0) return null;
         try { return Integer.parseInt(numero.toString()); }
-        catch (NumberFormatException e) { return 0; }
+        catch (NumberFormatException e) { return null; }
     }
 
-    
 
-    // Binarização combinada — idêntica ao original
+
+    // Binarização combinada
 
     private Mat binarizar(BufferedImage image, Mat bgr) {
         BufferedImage cinza  = grayscale.aplicarGrayscale(image);
         BufferedImage binImg = limiarizacao.aplicarLimiarizacao(cinza, LIMIAR_FIXO);
         Mat binTextoRaw = toMatGray(binImg);
-        Mat binTexto    = new Mat();
+        Mat binTexto    = CvScope.track(new Mat());
         Core.bitwise_not(binTextoRaw, binTexto);
 
-        Mat hsv = new Mat();
+        Mat hsv = CvScope.track(new Mat());
         Imgproc.cvtColor(bgr, hsv, Imgproc.COLOR_BGR2HSV);
         List<Mat> canais = new ArrayList<>();
         Core.split(hsv, canais);
-        Mat binSat = new Mat();
+        canais.forEach(CvScope::track);
+        Mat binSat = CvScope.track(new Mat());
         Imgproc.threshold(canais.get(1), binSat, SATURACAO_MIN, 255, Imgproc.THRESH_BINARY);
 
-        Mat bin = new Mat();
+        Mat bin = CvScope.track(new Mat());
         Core.bitwise_or(binTexto, binSat, bin);
         return bin;
     }
 
-    // normalizarGlifo — idêntico ao original
+    // normalizarGlifo
 
     private static Mat normalizarGlifo(Mat bin) {
-        Mat naoZero = new Mat();
-        Core.findNonZero(bin, naoZero);
-        if (naoZero.empty()) return Mat.zeros(NORM, NORM, CvType.CV_8UC1);
-        Rect bb   = Imgproc.boundingRect(naoZero);
-        Mat  crop = new Mat(bin, bb);
-        int    alvo   = NORM - 2 * MARGEM;
-        double escala = Math.min((double) alvo / crop.cols(), (double) alvo / crop.rows());
-        int    novaW  = Math.max(1, (int) Math.round(crop.cols() * escala));
-        int    novaH  = Math.max(1, (int) Math.round(crop.rows() * escala));
-        Mat resized = new Mat();
-        Imgproc.resize(crop, resized, new Size(novaW, novaH));
-        Mat canvas = Mat.zeros(NORM, NORM, CvType.CV_8UC1);
-        resized.copyTo(canvas.submat(new Rect((NORM-novaW)/2, (NORM-novaH)/2, novaW, novaH)));
-        return canvas;
+        return OpenCVUtils.normalizarGlifo(bin, NORM, MARGEM);
     }
 
-    // Templates 0-9 — idênticos ao original
+    // Templates 0-9
 
-    private static synchronized Map<Character, Mat> getTemplatesDigitos() {
+    private static byte[] bytes(Mat matrix) {
+        byte[] data = new byte[(int) matrix.total()];
+        matrix.get(0, 0, data);
+        return data;
+    }
+
+    private static synchronized Map<Character, byte[]> getTemplatesDigitos() {
         if (templatesDigitos == null) {
-            templatesDigitos = new HashMap<>();
+            Map<Character, byte[]> generated = new HashMap<>();
             for (char d = '0'; d <= '9'; d++)
-                templatesDigitos.put(d, gerarTemplateDigito(d));
+                generated.put(d, bytes(gerarTemplateDigito(d)));
+            templatesDigitos = java.util.Map.copyOf(generated);
         }
         return templatesDigitos;
     }
@@ -362,44 +375,24 @@ public class AnalisadorBarras {
                          (tam - fm.getHeight()) / 2 + fm.getAscent());
         g2.dispose();
         Mat mat = toMatGray(img);
-        Mat bin = new Mat();
+        Mat bin = CvScope.track(new Mat());
         Imgproc.threshold(mat, bin, 0, 255, Imgproc.THRESH_BINARY_INV + Imgproc.THRESH_OTSU);
         return normalizarGlifo(bin);
     }
 
     private static char classificarDigito(Mat glifo) {
-        Map<Character, Mat> tpls = getTemplatesDigitos();
+        Map<Character, byte[]> tpls = getTemplatesDigitos();
         char melhor = '?'; double melhorScore = -1;
-        for (Map.Entry<Character, Mat> e : tpls.entrySet()) {
-            double score = comparar(glifo, e.getValue());
+        for (Map.Entry<Character, byte[]> e : tpls.entrySet()) {
+            Mat template = new Mat(NORM, NORM, CvType.CV_8UC1);
+            template.put(0, 0, e.getValue());
+            double score;
+            try { score = OpenCVUtils.comparar(glifo, template, NORM); } finally { template.release(); }
             if (score > melhorScore) { melhorScore = score; melhor = e.getKey(); }
         }
-        return melhor;
+        return melhorScore >= 0.55 ? melhor : '?';
     }
 
-    private static double comparar(Mat a, Mat b) {
-        Mat xor = new Mat();
-        Core.bitwise_xor(a, b, xor);
-        return 1.0 - (double) Core.countNonZero(xor) / (NORM * NORM);
-    }
-
-    private static Mat toMat(BufferedImage img) {
-        BufferedImage bgr = new BufferedImage(
-            img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
-        bgr.getGraphics().drawImage(img, 0, 0, null);
-        byte[] data = ((DataBufferByte) bgr.getRaster().getDataBuffer()).getData();
-        Mat mat = new Mat(bgr.getHeight(), bgr.getWidth(), CvType.CV_8UC3);
-        mat.put(0, 0, data);
-        return mat;
-    }
-
-    private static Mat toMatGray(BufferedImage img) {
-        BufferedImage g = new BufferedImage(
-            img.getWidth(), img.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        g.getGraphics().drawImage(img, 0, 0, null);
-        byte[] data = ((DataBufferByte) g.getRaster().getDataBuffer()).getData();
-        Mat mat = new Mat(g.getHeight(), g.getWidth(), CvType.CV_8UC1);
-        mat.put(0, 0, data);
-        return mat;
-    }
+    private static Mat toMat(BufferedImage image) { return OpenCVUtils.toMat(image); }
+    private static Mat toMatGray(BufferedImage image) { return OpenCVUtils.toMatGray(image); }
 }

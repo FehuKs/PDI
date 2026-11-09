@@ -1,13 +1,18 @@
 package src.filtros;
 
+import src.core.Images;
+
 import java.awt.image.BufferedImage;
 
 public class Contraste {
 
     public BufferedImage aplicarContraste(BufferedImage image, float fatorContraste) {
+        Images.require(image);
+        if (!Float.isFinite(fatorContraste) || fatorContraste < 0 || fatorContraste > 10)
+            throw new IllegalArgumentException("Contraste deve estar entre 0 e 10.");
         int width = image.getWidth();
         int height = image.getHeight();
-        BufferedImage resultImage = new BufferedImage(width, height, image.getType());
+        BufferedImage resultImage = Images.like(image);
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
@@ -23,7 +28,7 @@ public class Contraste {
                 blue = ajustarContraste(blue, fatorContraste);
 
                 // Recombina os valores ajustados no pixel
-                int newRgb = (red << 16) | (green << 8) | blue;
+                int newRgb = (rgb & 0xff000000) | (red << 16) | (green << 8) | blue;
                 resultImage.setRGB(x, y, newRgb);
             }
         }

@@ -1,5 +1,7 @@
 package src.filtros;
 
+import src.core.Images;
+
 
 import java.awt.image.BufferedImage;
 
@@ -15,7 +17,7 @@ public class FiltrodeGaus {
     public BufferedImage aplicarFiltro(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
-        BufferedImage resultImage = new BufferedImage(width, height, image.getType());
+        BufferedImage resultImage = Images.like(image);
 
         // Aplica a convolução Gaussiana
         for (int channel = 0; channel < 3; channel++) {  // Itera pelos canais (R, G, B)
@@ -63,7 +65,7 @@ public class FiltrodeGaus {
         rgbChannels[channel] = newValue;
 
         // Combina os valores dos canais em um novo pixel
-        int newRgb = (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
+        int newRgb = (rgbOriginal & 0xff000000) | (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
         resultImage.setRGB(x, y, newRgb);
     }
 

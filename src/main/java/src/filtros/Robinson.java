@@ -1,5 +1,7 @@
 package src.filtros;
 
+import src.core.Images;
+
 import java.awt.image.BufferedImage;
 
 public class Robinson {
@@ -51,7 +53,7 @@ public class Robinson {
     public BufferedImage aplicarFiltro(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
-        BufferedImage resultImage = new BufferedImage(width, height, image.getType());
+        BufferedImage resultImage = Images.like(image);
 
         // Aplica a convolução em cada canal (R, G, B)
         for (int channel = 0; channel < 3; channel++) {
@@ -106,6 +108,6 @@ public class Robinson {
             rgb & 0xFF           // Blue
         };
         rgbChannels[channel] = value;
-        return (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
+        return (rgb & 0xff000000) | (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
     }
 }

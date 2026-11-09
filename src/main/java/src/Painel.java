@@ -1,12 +1,12 @@
 package src;
 
+import src.core.AnalysisResult;
+import src.core.EditorSession;
+import src.infra.ImageFiles;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.*;
 
@@ -58,9 +58,11 @@ public class Painel extends JFrame {
     private static final Color COR_TEXTO_MUTED   = new Color(0x888780);
     private static final Color COR_ACCENT        = new Color(0x185FA5);
 
-    private BufferedImage originalImage;
-    private BufferedImage transformedImage;
-    private final Deque<BufferedImage> historico = new ArrayDeque<>();
+    private final EditorSession session = new EditorSession();
+    private final ImageFiles imageFiles = new ImageFiles();
+    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(Painel.class.getName());
+    private boolean busy;
+    private final java.util.Map<Component, Boolean> enabledBeforeWork = new java.util.IdentityHashMap<>();
     private String arquivoAberto = "";
 
     private ImagemPanel lblOriginalImg;
@@ -92,7 +94,7 @@ public class Painel extends JFrame {
     private final LeitorRelogio      leitorRelogio      = new LeitorRelogio(grayscale, limiarizacao, zhangSuen);
     private final ContadorObjetos    contadorObjetos    = new ContadorObjetos(filtroMediana);
     private final ReconhecedorLetras reconhecedorLetras = new ReconhecedorLetras(grayscale, limiarizacao, filtroMediana);
-    private final IdentificadorPlacas identificadorPlacas = new IdentificadorPlacas(grayscale, limiarizacao);
+    private final IdentificadorPlacas identificadorPlacas = new IdentificadorPlacas();
     private final AnalisadorBarras   analisadorBarras   = new AnalisadorBarras(grayscale, limiarizacao);
 
     public Painel() {
@@ -105,6 +107,7 @@ public class Painel extends JFrame {
         configurarMenuBar();
         configurarCanvasArea();
         configurarStatusBar();
+        configurarArrastarImagem();
         // Abre a janela já maximizada (tela cheia)
         setExtendedState(JFrame.MAXIMIZED_BOTH);
     }
@@ -169,41 +172,35 @@ public class Painel extends JFrame {
         menuExtracao.add(menuItem("Ex.1 — Ler Relógio Analógico", e -> abrirDialogExtracao(
                 new LeitorRelogioView(() -> {
                     if (!verificarImagem()) return;
-                    BufferedImage alvo = imagemAtual();
-                    String resultado = leitorRelogio.lerHorario(alvo);
-                    mostrarResultado("Horário identificado", resultado);
+                    executarAnalise("Horário identificado", leitorRelogio::evaluate);
                 }), "Ler Relógio Analógico")));
 
         // Ex 2 — Contagem de Objetos Coloridos
         menuExtracao.add(menuItem("Ex.2 — Contar Objetos Coloridos", e -> abrirDialogExtracao(
                 new ContadorObjetosView(() -> {
                     if (!verificarImagem()) return;
-                    String resultado = contadorObjetos.contar(imagemAtual());
-                    mostrarResultado("Objetos por cor", resultado);
+                    executarAnalise("Objetos por cor", contadorObjetos::evaluate);
                 }), "Contar Objetos Coloridos")));
 
         // Ex 3 — Reconhecimento de Letras
         menuExtracao.add(menuItem("Ex.3 — Reconhecer Letras (A–Z)", e -> abrirDialogExtracao(
                 new ReconhecedorLetrasView(() -> {
                     if (!verificarImagem()) return;
-                    String resultado = reconhecedorLetras.reconhecer(imagemAtual());
-                    mostrarResultado("Letras encontradas", resultado);
+                    executarAnalise("Letras encontradas", reconhecedorLetras::evaluate);
                 }), "Reconhecer Letras")));
 
         // Ex 4 — Identificação de Placas
         menuExtracao.add(menuItem("Ex.4 — Identificar Placas de Trânsito", e -> abrirDialogExtracao(
                 new IdentificadorPlacasView(() -> {
                     if (!verificarImagem()) return;
-                    String resultado = identificadorPlacas.identificar(imagemAtual());
-                    mostrarResultado("Placas identificadas", resultado);
+                    executarAnalise("Placas identificadas", identificadorPlacas::evaluate);
                 }), "Identificar Placas de Trânsito")));
 
         // Ex 5 — Análise de Barras
         menuExtracao.add(menuItem("Ex.5 — Analisar Barras Verticais", e -> abrirDialogExtracao(
                 new AnalisadorBarrasView(() -> {
                     if (!verificarImagem()) return;
-                    String resultado = analisadorBarras.analisar(imagemAtual());
-                    mostrarResultado("Análise de barras", resultado);
+                    executarAnalise("Análise de barras", analisadorBarras::evaluate);
                 }), "Analisar Barras Verticais")));
 
         menuBar.add(menuArquivo);
@@ -325,46 +322,90 @@ public class Painel extends JFrame {
     // Lógica de transformação
     // ----------------------------------------------------------------
     private void aplicarTransformacao(java.util.function.UnaryOperator<BufferedImage> fn) {
-        BufferedImage atual = imagemAtual();
-        historico.push(atual);
-        btnDesfazer.setEnabled(true);
-        transformedImage = fn.apply(atual);
-        lblTransformedImg.setImagem(transformedImage);
+        if (!verificarImagem()) return;
+        executar("Processando imagem…", () -> session.apply(fn), image -> {
+            lblTransformedImg.setImagem(image);
+            atualizarStatus();
+        });
+    }
+
+    private BufferedImage imagemAtual() { return session.current(); }
+
+    private void desfazer() {
+        if (busy || !session.hasImage()) return;
+        lblTransformedImg.setImagem(session.undo());
         atualizarStatus();
     }
 
-    private BufferedImage imagemAtual() {
-        return transformedImage != null ? transformedImage : originalImage;
-    }
-
-    private void desfazer() {
-        if (!historico.isEmpty()) {
-            transformedImage = historico.pop();
-            lblTransformedImg.setImagem(transformedImage);
-            btnDesfazer.setEnabled(!historico.isEmpty());
-            atualizarStatus();
-        }
-    }
-
     private void resetar() {
-        if (originalImage != null) {
-            transformedImage = null; historico.clear(); btnDesfazer.setEnabled(false);
-            lblTransformedImg.setImagem(originalImage);
-            atualizarStatus();
-        }
+        if (busy || !session.hasImage()) return;
+        lblTransformedImg.setImagem(session.reset());
+        atualizarStatus();
     }
 
     private void atualizarStatus() {
-        if (originalImage == null) { lblStatus.setText("Nenhuma imagem carregada"); return; }
-        BufferedImage ref = imagemAtual();
-        String info = arquivoAberto + "  —  " + ref.getWidth() + " × " + ref.getHeight() + " px";
-        if (!historico.isEmpty()) info += "  ·  " + historico.size() + " operação(ões)";
-        lblStatus.setText(info);
+        btnDesfazer.setEnabled(!busy && session.canUndo());
+        if (!session.hasImage()) { lblStatus.setText("Nenhuma imagem carregada"); return; }
+        BufferedImage image = session.current();
+        lblStatus.setText(arquivoAberto + "  —  " + image.getWidth() + " × " + image.getHeight()
+                + " px  ·  " + session.historySize() + " operação(ões) disponíveis para desfazer");
     }
 
-  
-    // Helpers
-    
+    private void executarAnalise(String title, java.util.function.Function<BufferedImage, AnalysisResult> analysis) {
+        if (!verificarImagem()) return;
+        BufferedImage image = session.current();
+        executar("Analisando imagem…", () -> analysis.apply(image), result -> {
+            atualizarStatus();
+            JOptionPane.showMessageDialog(this, result.summary(), title,
+                    result.status() == AnalysisResult.Status.IDENTIFIED
+                            ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+        });
+    }
+
+    private <T> void executar(String message, java.util.concurrent.Callable<T> work, java.util.function.Consumer<T> success) {
+        if (busy) return;
+        Window active = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+        if (active instanceof JDialog && active.getOwner() == this) active.dispose();
+        busy = true;
+        enabledBeforeWork.clear();
+        habilitarDuranteTrabalho(getContentPane(), false);
+        habilitarDuranteTrabalho(getJMenuBar(), false);
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        lblStatus.setText(message);
+        new SwingWorker<T, Void>() {
+            @Override protected T doInBackground() throws Exception { return work.call(); }
+            @Override protected void done() {
+                busy = false;
+                enabledBeforeWork.forEach(Component::setEnabled);
+                enabledBeforeWork.clear();
+                setCursor(Cursor.getDefaultCursor());
+                atualizarStatus();
+                try { success.accept(get()); }
+                catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
+                catch (java.util.concurrent.ExecutionException ex) { mostrarErro(ex.getCause()); }
+            }
+        }.execute();
+    }
+
+    private void habilitarDuranteTrabalho(Component component, boolean enabled) {
+        if (component instanceof AbstractButton || component instanceof JTextField || component instanceof JComboBox) {
+            enabledBeforeWork.put(component, component.isEnabled());
+            component.setEnabled(enabled);
+        }
+        if (component instanceof JMenu menu) {
+            for (Component child : menu.getMenuComponents()) habilitarDuranteTrabalho(child, enabled);
+        } else if (component instanceof Container container) {
+            for (Component child : container.getComponents()) habilitarDuranteTrabalho(child, enabled);
+        }
+    }
+
+    private void mostrarErro(Throwable error) {
+        LOG.log(java.util.logging.Level.WARNING, "Falha na operação de imagem", error);
+        String message = error instanceof LinkageError ? "Não foi possível carregar o OpenCV para esta plataforma. Consulte o README."
+                : error.getMessage() == null ? "Não foi possível concluir a operação." : error.getMessage();
+        JOptionPane.showMessageDialog(this, message, "Erro", JOptionPane.ERROR_MESSAGE);
+    }
+
     private void abrirDialog(JPanel view, String titulo) {
         if (!verificarImagem()) return;
         JOptionPane.showMessageDialog(this, view, titulo, JOptionPane.PLAIN_MESSAGE);
@@ -375,22 +416,9 @@ public class Painel extends JFrame {
         JOptionPane.showMessageDialog(this, view, titulo, JOptionPane.PLAIN_MESSAGE);
     }
 
-    /** Exibe o resultado de um exercício de extração em uma janela de diálogo */
-    private void mostrarResultado(String titulo, String resultado) {
-        JPanel painel = new JPanel(new BorderLayout(8, 8));
-        painel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        JLabel lblResultado = new JLabel(
-            "<html><div style='font-size:14pt'><b>" + resultado + "</b></div></html>"
-        );
-        lblResultado.setHorizontalAlignment(SwingConstants.CENTER);
-        painel.add(lblResultado, BorderLayout.CENTER);
-
-        JOptionPane.showMessageDialog(this, painel, titulo, JOptionPane.INFORMATION_MESSAGE);
-    }
-
     private boolean verificarImagem() {
-        if (originalImage == null) {
+        if (busy) return false;
+        if (!session.hasImage()) {
             JOptionPane.showMessageDialog(this, "Abra uma imagem primeiro.", "Sem imagem", JOptionPane.WARNING_MESSAGE);
             return false;
         }
@@ -398,42 +426,59 @@ public class Painel extends JFrame {
     }
 
     private void abrirImagem() {
+        if (busy) return;
         FileDialog fd = new FileDialog(this, "Selecione a imagem", FileDialog.LOAD);
         fd.setVisible(true);
-        if (fd.getFile() == null) return;
-        try {
-            originalImage    = ImageIO.read(new File(fd.getDirectory() + fd.getFile()));
-            transformedImage = null; historico.clear(); btnDesfazer.setEnabled(false);
-            arquivoAberto    = fd.getFile();
-            lblOriginalImg.setImagem(originalImage);
-            lblTransformedImg.setImagem(originalImage);
+        if (fd.getFile() != null) carregarImagem(java.nio.file.Path.of(fd.getDirectory(), fd.getFile()));
+        fd.dispose();
+    }
+
+    public void carregarImagem(java.nio.file.Path path) {
+        executar("Carregando imagem…", () -> { session.load(imageFiles.read(path)); return session.current(); }, image -> {
+            arquivoAberto = path.getFileName().toString();
+            lblOriginalImg.setImagem(session.original());
+            lblTransformedImg.setImagem(session.current());
             atualizarStatus();
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Erro ao carregar a imagem.", "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        });
     }
 
     private void salvarImagem() {
-        if (transformedImage == null) {
-            JOptionPane.showMessageDialog(this, "Nenhuma imagem transformada para salvar.", "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        if (!verificarImagem()) return;
         FileDialog fd = new FileDialog(this, "Salvar imagem", FileDialog.SAVE);
-        fd.setFile("*.png"); fd.setVisible(true);
-        if (fd.getFile() == null) return;
-        String nome = fd.getFile().toLowerCase().endsWith(".png") ? fd.getFile() : fd.getFile() + ".png";
-        try {
-            ImageIO.write(transformedImage, "png", new File(fd.getDirectory() + nome));
-            JOptionPane.showMessageDialog(this, "Imagem salva com sucesso.", "Salvo", JOptionPane.INFORMATION_MESSAGE);
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Erro ao salvar.", "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        fd.setFile("resultado.png"); fd.setVisible(true);
+        if (fd.getFile() == null) { fd.dispose(); return; }
+        String name = fd.getFile().toLowerCase(java.util.Locale.ROOT).endsWith(".png") ? fd.getFile() : fd.getFile() + ".png";
+        java.nio.file.Path path = java.nio.file.Path.of(fd.getDirectory(), name);
+        fd.dispose();
+        if (java.nio.file.Files.exists(path) && JOptionPane.showConfirmDialog(this,
+                "Substituir o arquivo existente?", "Salvar imagem", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        BufferedImage image = session.current();
+        executar("Salvando imagem…", () -> { imageFiles.writePng(image, path); return path; },
+                saved -> JOptionPane.showMessageDialog(this, "Imagem salva com sucesso.", "Salvo", JOptionPane.INFORMATION_MESSAGE));
+    }
+
+    private void configurarArrastarImagem() {
+        lblOriginalImg.setTransferHandler(new TransferHandler() {
+            @Override public boolean canImport(TransferSupport support) {
+                return !busy && support.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+            }
+            @Override public boolean importData(TransferSupport support) {
+                if (!canImport(support)) return false;
+                try {
+                    java.util.List<?> files = (java.util.List<?>) support.getTransferable()
+                            .getTransferData(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+                    if (files.isEmpty() || !(files.get(0) instanceof File file)) return false;
+                    carregarImagem(file.toPath());
+                    return true;
+                } catch (Exception ex) { mostrarErro(ex); return false; }
+            }
+        });
     }
 
     private void mostrarSobre() {
         JOptionPane.showMessageDialog(this,
             "<html><div style='text-align:center'>Processamento Digital de Imagens<br>"
-            + "<small>Fernando Hubner Silva — v1.6</small></div></html>",
+            + "<small>Fernando Hubner Silva — v1.7</small></div></html>",
             "Sobre", JOptionPane.INFORMATION_MESSAGE);
     }
 

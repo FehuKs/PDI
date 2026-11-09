@@ -1,4 +1,6 @@
 package src.filtros;
+
+import src.core.Images;
 import java.awt.image.BufferedImage;
 
 public class Grayscale {
@@ -7,7 +9,7 @@ public class Grayscale {
         int width = image.getWidth();
         int height = image.getHeight();
 
-        BufferedImage resultImage = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+        BufferedImage resultImage = Images.like(image);
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
@@ -22,7 +24,7 @@ public class Grayscale {
                 int grayscale = (red + green + blue) / 3;
 
                 // Criar a nova cor em escala de cinza
-                int newPixel = (grayscale << 16) | (grayscale << 8) | grayscale;
+                int newPixel = (rgb & 0xff000000) | (grayscale << 16) | (grayscale << 8) | grayscale;
 
                 // Definir o novo valor do pixel na imagem resultante
                 resultImage.setRGB(x, y, newPixel);

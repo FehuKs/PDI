@@ -1,5 +1,7 @@
 package src.filtros;
 
+import src.core.Images;
+
 import java.awt.image.BufferedImage;
 
 public class BordasdeSobel {
@@ -20,7 +22,7 @@ public class BordasdeSobel {
     public BufferedImage aplicarFiltro(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
-        BufferedImage resultImage = new BufferedImage(width, height, image.getType());
+        BufferedImage resultImage = Images.like(image);
 
         // Aplica a convolução de Sobel
         for (int channel = 0; channel < 3; channel++) {  // Itera pelos canais (R, G, B)
@@ -66,7 +68,7 @@ public class BordasdeSobel {
         };
         rgbChannels[channel] = value;
 
-        int newRgb = 0xFF000000 | (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
+        int newRgb = (rgbOriginal & 0xff000000) | (rgbChannels[0] << 16) | (rgbChannels[1] << 8) | rgbChannels[2];
         image.setRGB(x, y, newRgb);
     }
 }

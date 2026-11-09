@@ -1,5 +1,8 @@
 package src.desafio;
 
+import src.core.Images;
+import src.core.AnalysisResult;
+
 import src.filtros.FiltrodaMediana;
 
 import java.awt.image.BufferedImage;
@@ -20,7 +23,14 @@ public class ContadorObjetos {
     // -----------------------------------------------------------------------
     // Método principal
     // -----------------------------------------------------------------------
-    public String contar(BufferedImage image) {
+    public String contar(BufferedImage image) { return evaluate(image).summary(); }
+
+    public AnalysisResult evaluate(BufferedImage image) {
+        Images.require(image);
+        return contarInternal(image);
+    }
+
+    private AnalysisResult contarInternal(BufferedImage image) {
         // 1. Mediana para remover ruído antes da segmentação por cor
         BufferedImage suavizada = filtroMediana.aplicarFiltroMediana(image);
 
@@ -54,15 +64,18 @@ public class ContadorObjetos {
 
         // Monta resultado
         StringBuilder sb = new StringBuilder();
+        java.util.Map<String, String> counts = new java.util.LinkedHashMap<>();
         for (int c = 0; c < 4; c++) {
             for (int f = 0; f < 4; f++) {
                 if (contagem[c][f] > 0) {
+                    counts.put(nomeCor[c] + "." + nomeForma[f], String.valueOf(contagem[c][f]));
                     if (sb.length() > 0) sb.append(", ");
                     sb.append(contagem[c][f]).append(" ").append(nomeForma[f]).append(" ").append(nomeCor[c]);
                 }
             }
         }
-        return sb.length() > 0 ? sb.toString() : "Nenhum objeto colorido encontrado";
+        return new AnalysisResult(sb.length() > 0 ? AnalysisResult.Status.IDENTIFIED : AnalysisResult.Status.NOT_FOUND,
+                sb.length() > 0 ? sb.toString() : "Nenhum objeto colorido encontrado", counts);
     }
 
     // -----------------------------------------------------------------------
@@ -111,7 +124,7 @@ public class ContadorObjetos {
         circ = Math.min(circ, 1.0);
 
         if (solidez < 0.65)              return 3; // Triângulo
-        if (circ  > 0.82 && aspecto < 1.25) return 0; // Círculo
+        if (solidez < 0.90 && circ > 0.82 && aspecto < 1.25) return 0; // Círculo
         if (circ  > 0.68 && aspecto < 1.35) return 1; // Quadrado
         return 2;                                   // Retângulo
     }

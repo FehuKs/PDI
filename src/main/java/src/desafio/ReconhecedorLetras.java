@@ -1,5 +1,9 @@
 package src.desafio;
 
+import src.core.Images;
+import src.infra.CvScope;
+import src.core.AnalysisResult;
+
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
 
@@ -22,20 +26,17 @@ import java.util.Map;
 
 public class ReconhecedorLetras {
 
-    static {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-    }
 
     private static final int    NORM        = 40;
     private static final int    MARGEM      = 4;
     private static final double AREA_MIN    = 30.0;
     private static final int    LIMIAR_FIXO = 128;
 
-    @SuppressWarnings("unused") private final Grayscale     grayscale;
-    @SuppressWarnings("unused") private final Limiarizacao  limiarizacao;
+    private final Grayscale     grayscale;
+    private final Limiarizacao  limiarizacao;
     private final FiltrodaMediana filtroMediana;
 
-    private static Map<Character, Mat> templatesLetras;
+    private static Map<Character, byte[]> templatesLetras;
 
     public ReconhecedorLetras(Grayscale g, Limiarizacao l, FiltrodaMediana f) {
         this.grayscale     = g;
@@ -46,31 +47,41 @@ public class ReconhecedorLetras {
     // ===================================================================
     // Método principal
     // ===================================================================
-    public String reconhecer(BufferedImage image) {
+    public String reconhecer(BufferedImage image) { return evaluate(image).summary(); }
+
+    public AnalysisResult evaluate(BufferedImage image) {
+        Images.require(image);
+        try (CvScope resources = CvScope.open()) {
+            return reconhecerInternal(image);
+        }
+    }
+
+    private AnalysisResult reconhecerInternal(BufferedImage image) {
         Mat bin = preprocessar(image);
 
         List<Rect> caixas = segmentar(bin, Imgproc.RETR_EXTERNAL);
 
-        if (caixas.isEmpty()) return "Nenhuma letra identificada";
+        if (caixas.isEmpty()) return new AnalysisResult(AnalysisResult.Status.NOT_FOUND, "Nenhuma letra identificada", java.util.Map.of());
 
         caixas.sort(Comparator.comparingInt(r -> r.x));
 
         List<Character> letras = new ArrayList<>();
         for (Rect bb : caixas) {
-            Mat glifo = new Mat(bin, bb);
+            Mat glifo = CvScope.track(new Mat(bin, bb));
             Mat norm  = OpenCVUtils.normalizarGlifo(glifo, NORM, MARGEM);
             char letra = classificarLetra(norm);
-            if (letra != '?') letras.add(letra);
+            letras.add(letra);
         }
 
-        if (letras.isEmpty()) return "Nenhuma letra identificada";
+        if (letras.isEmpty()) return new AnalysisResult(AnalysisResult.Status.NOT_FOUND, "Nenhuma letra identificada", java.util.Map.of());
 
         StringBuilder sb = new StringBuilder();
         for (Character c : letras) {
             if (sb.length() > 0) sb.append(", ");
             sb.append(c);
         }
-        return sb.toString();
+        return new AnalysisResult(letras.contains('?') ? AnalysisResult.Status.INCONCLUSIVE : AnalysisResult.Status.IDENTIFIED,
+                sb.toString(), java.util.Map.of("glyphs", String.valueOf(letras.size())));
     }
 
     // ===================================================================
@@ -82,7 +93,7 @@ public class ReconhecedorLetras {
         BufferedImage binImg = limiarizacao.aplicarLimiarizacao(suave, LIMIAR_FIXO);
 
         Mat binRaw = OpenCVUtils.toMatGray(binImg);
-        Mat bin    = new Mat();
+        Mat bin    = CvScope.track(new Mat());
         Core.bitwise_not(binRaw, bin);
 
         // Fallback Otsu
@@ -90,7 +101,7 @@ public class ReconhecedorLetras {
         double razao = Core.countNonZero(bin) / total;
         if (razao < 0.002 || razao > 0.7) {
             Mat suaveMat = OpenCVUtils.toMatGray(suave);
-            Mat binOtsu  = new Mat();
+            Mat binOtsu  = CvScope.track(new Mat());
             Imgproc.threshold(suaveMat, binOtsu, 0, 255,
                 Imgproc.THRESH_BINARY_INV + Imgproc.THRESH_OTSU);
             return binOtsu;
@@ -103,8 +114,9 @@ public class ReconhecedorLetras {
     // ===================================================================
     private List<Rect> segmentar(Mat bin, int modo) {
         List<MatOfPoint> contornos = new ArrayList<>();
-        Imgproc.findContours(bin.clone(), contornos, new Mat(),
+        Imgproc.findContours(CvScope.track(bin.clone()), contornos, CvScope.track(new Mat()),
             modo, Imgproc.CHAIN_APPROX_SIMPLE);
+        contornos.forEach(CvScope::track);
         List<Rect> caixas = new ArrayList<>();
         for (MatOfPoint c : contornos) {
             if (Imgproc.contourArea(c) >= AREA_MIN)
@@ -116,11 +128,18 @@ public class ReconhecedorLetras {
     // ===================================================================
     // Templates A-Z
     // ===================================================================
-    private static synchronized Map<Character, Mat> getTemplatesLetras() {
+    private static byte[] bytes(Mat matrix) {
+        byte[] data = new byte[(int) matrix.total()];
+        matrix.get(0, 0, data);
+        return data;
+    }
+
+    private static synchronized Map<Character, byte[]> getTemplatesLetras() {
         if (templatesLetras == null) {
-            templatesLetras = new HashMap<>();
+            Map<Character, byte[]> generated = new HashMap<>();
             for (char c = 'A'; c <= 'Z'; c++)
-                templatesLetras.put(c, gerarTemplateLetra(c));
+                generated.put(c, bytes(gerarTemplateLetra(c)));
+            templatesLetras = java.util.Map.copyOf(generated);
         }
         return templatesLetras;
     }
@@ -140,18 +159,21 @@ public class ReconhecedorLetras {
                          (tam - fm.getHeight()) / 2 + fm.getAscent());
         g2.dispose();
         Mat mat = OpenCVUtils.toMatGray(img);
-        Mat bin = new Mat();
+        Mat bin = CvScope.track(new Mat());
         Imgproc.threshold(mat, bin, 0, 255, Imgproc.THRESH_BINARY_INV + Imgproc.THRESH_OTSU);
         return OpenCVUtils.normalizarGlifo(bin, NORM, MARGEM);
     }
 
     private static char classificarLetra(Mat glifo) {
-        Map<Character, Mat> tpls = getTemplatesLetras();
+        Map<Character, byte[]> tpls = getTemplatesLetras();
         char melhor = '?'; double melhorScore = -1;
-        for (Map.Entry<Character, Mat> e : tpls.entrySet()) {
-            double score = OpenCVUtils.comparar(glifo, e.getValue(), NORM);
+        for (Map.Entry<Character, byte[]> e : tpls.entrySet()) {
+            Mat template = new Mat(NORM, NORM, CvType.CV_8UC1);
+            template.put(0, 0, e.getValue());
+            double score;
+            try { score = OpenCVUtils.comparar(glifo, template, NORM); } finally { template.release(); }
             if (score > melhorScore) { melhorScore = score; melhor = e.getKey(); }
         }
-        return melhor;
+        return melhorScore >= 0.70 ? melhor : '?';
     }
 }

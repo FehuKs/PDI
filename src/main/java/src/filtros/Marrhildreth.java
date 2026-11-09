@@ -13,11 +13,13 @@ public class Marrhildreth {
     private final int limiar;
 
     public Marrhildreth(double sigma, int limiar) {
+        if (!Double.isFinite(sigma) || sigma < 0.1 || sigma > 5 || limiar < 0 || limiar > 2040)
+            throw new IllegalArgumentException("Sigma deve estar entre 0.1 e 5 e T entre 0 e 2040.");
         this.sigma  = sigma;
         this.limiar = limiar;
     }
 
-    
+
     public BufferedImage aplicarFiltro(BufferedImage imagem) {
         int largura = imagem.getWidth();
         int altura  = imagem.getHeight();
@@ -97,7 +99,7 @@ public class Marrhildreth {
 
                 for (int i = -raio; i <= raio; i++) {
                     for (int j = -raio; j <= raio; j++) {
-                        // Espelhamento nas bordas (mirror padding)
+                        // Replicação do pixel mais próximo na borda
                         int xi = Math.max(0, Math.min(x + i, largura - 1));
                         int yi = Math.max(0, Math.min(y + j, altura - 1));
 
