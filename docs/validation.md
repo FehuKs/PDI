@@ -19,7 +19,9 @@ Leia os relatórios de cada execução em `target/surefire-reports/`. O perfil h
 
 ## O que esses testes não demonstram
 
-A renderização usada para A–Z é próxima da geração de templates; os resultados demonstram integração e regressão, não generalização de OCR. Os limiares e formatos foram verificados em exemplos controlados. Não houve avaliação com fotografias, ruído real, múltiplas fontes independentes, sinais de trânsito variados ou gráficos de layouts arbitrários.
+As 15 imagens originais fornecidas pela professora são verificadas por `TeacherImagesTest`, incluído nos testes padrão e no perfil desktop: **15 aprovações**, sem falhas, erros ou omissões. Os horários são os confirmados pelo usuário, incluindo 10:15 no terceiro relógio. O [relatório do conjunto](teacher-images.md) registra cada saída, as correções, a comparação com a avaliação anterior e como reproduzir a execução.
+
+A renderização usada para A–Z é próxima da geração de templates; os resultados desses testes sintéticos demonstram integração e regressão, não generalização de OCR. A avaliação externa acima cobre apenas as 15 ilustrações fornecidas. Isso não demonstra generalização para fotografias, ruído real, outras famílias tipográficas, variações de placas ou gráficos de layouts arbitrários.
 
 Uma futura avaliação deve separar exemplos de ajuste e teste; registrar rótulos reais, status inconclusivo, falsos positivos e negativos por módulo; variar resolução e iluminação; e medir tempo e memória em condições descritas. Só então será adequado publicar métricas de qualidade ou desempenho.
 
@@ -33,3 +35,14 @@ Uma futura avaliação deve separar exemplos de ajuste e teste; registrar rótul
 - Nenhuma dependência nova; processamento, sessão e persistência mantidos.
 
 Verificações executadas em Linux com JDK 21. Leitores de tela, Windows/macOS e os seletores nativos de arquivos não foram automatizados nesta entrega.
+
+
+## Verificação das correções dos desafios
+
+- `clean verify` headless: 104 casos, **100 aprovados**, quatro testes de janela omitidos, nenhuma falha ou erro.
+- `verify` com perfil desktop e Xvfb: **104 aprovados**, nenhuma falha, erro ou omissão.
+- As 15 imagens da professora estão incluídas automaticamente em ambos os perfis.
+- O terceiro relógio usa 10:15, confirmado pelo usuário após conferir a imagem.
+- Os hashes das 15 imagens continuam iguais aos originais do ZIP. A formatação dos seis fontes alterados/adicionados e `git diff --check` foram verificados.
+
+Os [resultados por imagem](teacher-images-results.json) incluem o commit de base e os hashes dos fontes locais avaliados. Os [resultados anteriores](teacher-images-baseline.json) foram preservados para comparação.
