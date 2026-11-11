@@ -1,15 +1,12 @@
 package src.desafio;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class AnalisadorBarrasView extends JPanel {
-
+public class AnalisadorBarrasView extends ActionForm {
     public AnalisadorBarrasView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Analisador Barras");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super(
+                "Compare barras verticais com rótulos ou escala legíveis.",
+                "Analisar barras",
+                callback);
     }
 }
-    

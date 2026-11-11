@@ -1,14 +1,9 @@
 package src.filtros;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class FiltrodeGausView extends JPanel {
-
+public class FiltrodeGausView extends ActionForm {
     public FiltrodeGausView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Filtro Gaussiano");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super("Suavize a imagem com um filtro gaussiano.", "Aplicar Gaussiano", callback);
     }
 }

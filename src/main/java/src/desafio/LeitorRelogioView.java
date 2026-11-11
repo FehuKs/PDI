@@ -1,15 +1,9 @@
 package src.desafio;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class LeitorRelogioView extends JPanel {
-
+public class LeitorRelogioView extends ActionForm {
     public LeitorRelogioView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Leitor Relogio");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super("Leia o horário em uma imagem de relógio analógico.", "Ler relógio", callback);
     }
 }
-    

@@ -1,14 +1,26 @@
 package src.transformacoes;
-import javax.swing.*;
+
+import src.ui.*;
+
 import java.util.function.Consumer;
 
-public class RotacionarView extends JPanel {
+import javax.swing.*;
+
+public class RotacionarView extends ParameterForm {
     public RotacionarView(Consumer<int[]> callback) {
-        JTextField angle = new JTextField("0", 5);
-        JComboBox<String> direction = new JComboBox<>(new String[]{"Direita", "Esquerda"});
-        JButton apply = new JButton("Aplicar");
-        apply.addActionListener(e -> src.ui.Inputs.apply(this, () -> callback.accept(new int[]{
-            src.ui.Inputs.integer(angle.getText(), -360, 360), direction.getSelectedIndex() == 0 ? 1 : 0})));
-        add(new JLabel("Ângulo (-360 a 360)")); add(angle); add(direction); add(apply);
+        super("Gire a imagem. A área de resultado se adapta à rotação.");
+        JTextField angle = new JTextField("0");
+        angle.setName("parameter.angle");
+        JComboBox<String> direction = new JComboBox<>(new String[] {"Direita", "Esquerda"});
+        field("Ângulo", angle, "De −360° a 360°.");
+        field("Direção", direction, null);
+        submit(
+                "Rotacionar",
+                () ->
+                        callback.accept(
+                                new int[] {
+                                    Inputs.integer(angle.getText(), -360, 360),
+                                    direction.getSelectedIndex() == 0 ? 1 : 0
+                                }));
     }
 }

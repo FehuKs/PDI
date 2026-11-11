@@ -1,14 +1,9 @@
 package src.morfologia;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class Dilatacaoview extends JPanel {
-
+public class Dilatacaoview extends ActionForm {
     public Dilatacaoview(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Dilatacao");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super("Expanda as regiões claras da imagem.", "Aplicar dilatação", callback);
     }
 }

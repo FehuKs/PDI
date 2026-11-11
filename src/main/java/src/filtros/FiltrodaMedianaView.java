@@ -1,15 +1,12 @@
 package src.filtros;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class FiltrodaMedianaView extends JPanel {
-
+public class FiltrodaMedianaView extends ActionForm {
     public FiltrodaMedianaView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Filtro de Mediana");
-        btn.addActionListener(e -> callback.run());
-        add(new JLabel("Clique para aplicar o Filtro da Mediana", SwingConstants.CENTER), BorderLayout.NORTH);
-        add(btn, BorderLayout.CENTER);
+        super(
+                "Reduza ruídos locais preservando as transições da imagem.",
+                "Aplicar mediana",
+                callback);
     }
 }
