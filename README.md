@@ -106,6 +106,8 @@ xvfb-run -a ./mvnw -Pdesktop verify
 
 O perfil padrão é headless e omite os testes que abrem janelas. O perfil `desktop` também valida a edição, navegação, parâmetros, teclado, arrastar arquivos e comportamento responsivo. Os relatórios ficam em `target/surefire-reports/`.
 
+As **15 imagens originais da professora** também são verificadas pelo comando padrão, através de `TeacherImagesTest`. Todas passaram na execução documentada após correções em letras, gráficos e relógios. Para executar somente esse conjunto: `./mvnw -Dtest=TeacherImagesTest test`. Consulte os [gabaritos, saídas, correções e limites da avaliação](docs/teacher-images.md).
+
 A [CI](.github/workflows/ci.yml) executa build e testes com Java 17/21 e o teste desktop com Xvfb em Java 21. A configuração de CI não comprova uma execução remota bem-sucedida; consulte os resultados do GitHub Actions.
 
 ## Arquitetura e decisões
@@ -126,7 +128,7 @@ A [CI](.github/workflows/ci.yml) executa build e testes com Java 17/21 e o teste
 - Saídas de filtros são RGB/ARGB para evitar quantização entre escritas de canais em imagens cinza/indexadas. O alfa é preservado; operações intencionalmente binárias, como afinamento, produzem imagem opaca.
 - Rotação usa o centro dos pixels `(dimensão - 1) / 2`; transformações usam vizinho mais próximo. A interpolação bilinear da interface afeta apenas a visualização.
 - Filtros de mediana/Gaussiano replicam a borda. Morfologia preserva a borda; Sobel/Robinson deixam o contorno externo preto. Essas políticas foram mantidas e não são intercambiáveis.
-- A similaridade de glifos usa IoU do primeiro plano, evitando que margens vazias inflem o resultado. Os limiares de aceitação são heurísticos, não probabilidades calibradas.
+- Templates de glifos cobrem famílias com e sem serifa e diferentes espessuras. A similaridade usa IoU do primeiro plano, evitando que margens vazias inflem o resultado. Os limiares de aceitação são heurísticos, não probabilidades calibradas.
 - Arquivos de entrada têm limite de 64 MiB e imagens de 16 milhões de pixels. O histórico guarda até 20 estados e 128 MB de pixels. Os limites não constituem garantia contra todo esgotamento de memória em decodificadores.
 - Operações trabalham sobre uma cópia, e o histórico só muda após sucesso. Processamento e arquivos rodam em segundo plano, com ações concorrentes bloqueadas.
 
@@ -134,8 +136,8 @@ Mais detalhes: [arquitetura e manutenção](docs/architecture.md) e [validação
 
 ## Limitações e evolução futura
 
-Os exercícios pressupõem imagens simples: objetos separados nas quatro cores suportadas; letras escuras sobre fundo claro e próximas da fonte dos templates; relógio com ponteiros distinguíveis; barras verticais com base comum e rótulos ou escala legíveis. Classificação de placas continua heurística: não lê o valor de velocidade nem oferece reconhecimento geral de sinais.
+Os exercícios pressupõem imagens simples: objetos separados nas quatro cores suportadas; letras escuras sobre fundo claro e próximas das fontes e espessuras dos templates; relógio com ponteiros distinguíveis; barras verticais com base comum e rótulos ou escala legíveis. Classificação de placas continua heurística: não lê o valor de velocidade nem oferece reconhecimento geral de sinais.
 
 Não há benchmark com imagens reais, garantia de generalização, métricas de cobertura ou comparação de desempenho. Casos difíceis podem continuar produzindo falsos positivos ou negativos. Testes sintéticos e correções de regressão não eliminam essa limitação.
 
-Evoluções **não implementadas**: avaliação com conjuntos externos rotulados, parâmetros calibrados por resolução, automação em lote, API/exportação de análises e comparação com modelos de aprendizado. Um assistente com LLM exigiria proposta e autorização próprias; não foi incluído nesta refatoração.
+Evoluções **não implementadas**: avaliação com conjuntos independentes ampliados, parâmetros calibrados por resolução, automação em lote, API/exportação de análises e comparação com modelos de aprendizado. Um assistente com LLM exigiria proposta e autorização próprias; não foi incluído nesta refatoração.

@@ -1,0 +1,110 @@
+{
+  "archive_sha256": "c7488f20d70b3765adab60708b3bde5ce3eafc264a540cd8d124ba8d237c5da6",
+  "files": [
+    {
+      "file": "Formas 1.png",
+      "sha256": "9d2f81079c1095a57a9e6e0e5b9359e56c616a58738b4179f881326f9b31d5b7",
+      "width": 1600,
+      "height": 900,
+      "bytes": 28913
+    },
+    {
+      "file": "Formas 2.jpeg",
+      "sha256": "3b66243f048e2f807b265a72bd47969295ee603fef587b63de2452ae9ce60e6f",
+      "width": 1600,
+      "height": 900,
+      "bytes": 33490
+    },
+    {
+      "file": "Formas 3.jpeg",
+      "sha256": "b9cb4f0b25afefce972b2bf85537247e797f170875b3837ded457dc03bee1bcd",
+      "width": 1600,
+      "height": 900,
+      "bytes": 29173
+    },
+    {
+      "file": "Grafico 1.jpeg",
+      "sha256": "69796940009151adf1438b9d4bf8931a8531c0c7cb2541adc3dfc39814ec7440",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 27165
+    },
+    {
+      "file": "Grafico 2.jpeg",
+      "sha256": "a4ed5afd03893072942e325b080a1b24f751fec1101db21627e1d4e366e35dba",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 26544
+    },
+    {
+      "file": "Letras 1.jpeg",
+      "sha256": "90eee9d6b13b6862167753465a42d8a3f09877768fb19b602b8324c5ef0203ce",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 22308
+    },
+    {
+      "file": "Letras 2.jpeg",
+      "sha256": "dfb12a72299414bc32979a3d53fafaf636d49771184090978d24742c372fb357",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 24009
+    },
+    {
+      "file": "Letras 3.jpeg",
+      "sha256": "75e2c8029f76e771598e6ca6fb639b9dff793a6f66b6c738aa6c466fa9d58ead",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 25849
+    },
+    {
+      "file": "Placa 1.jpeg",
+      "sha256": "4f1cc39f7d849adbaeedb39e7703e0b5ca201996a8e96d792447ea45ea4464d5",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 45035
+    },
+    {
+      "file": "Placa 2.jpeg",
+      "sha256": "92e51107822f3ae0a8c896fd9036be6d43e8883a51ae42fb2270316b46810bf3",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 50300
+    },
+    {
+      "file": "Placa 3.jpeg",
+      "sha256": "ffa1b7ae747f73d84b87a226a7a1781a44a13946b4cde3845a8b112fbaf38609",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 49604
+    },
+    {
+      "file": "Placa 4.jpeg",
+      "sha256": "8f705bf44c1000c70fcf4d84a93d00631ca665f4eded6842bd63147b4eb9847e",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 47394
+    },
+    {
+      "file": "Relogio 1.jpeg",
+      "sha256": "985667d2fb8a087da9152abb9de991ac6dd167f510c3a1a00df0a5886cbd108d",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 66626
+    },
+    {
+      "file": "Relogio 2.jpeg",
+      "sha256": "73cb5cbe31f987953bbebe42ff544558f71eda63d54d37aa99f515431fce1ac3",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 57987
+    },
+    {
+      "file": "Relogio 3.jpeg",
+      "sha256": "633ef3957775bf66c0fd0c8c839a8dab50d881df7a75889d30cbea754fdf83df",
+      "width": 1080,
+      "height": 1350,
+      "bytes": 66053
+    }
+  ]
+}
