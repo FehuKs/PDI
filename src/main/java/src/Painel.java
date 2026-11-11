@@ -1,524 +1,885 @@
 package src;
 
-import src.core.AnalysisResult;
-import src.core.EditorSession;
+import src.afinamento.*;
+import src.core.*;
+import src.desafio.*;
+import src.filtros.*;
 import src.infra.ImageFiles;
+import src.morfologia.*;
+import src.transformacoes.*;
+import src.ui.*;
 
 import java.awt.*;
+import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.*;
+import java.util.*;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.function.*;
+import java.util.logging.*;
+
 import javax.swing.*;
-import javax.swing.border.*;
+import javax.swing.border.EmptyBorder;
 
-import src.desafio.AnalisadorBarras;
-import src.desafio.AnalisadorBarrasView;
-import src.desafio.ContadorObjetos;
-import src.desafio.ContadorObjetosView;
-import src.desafio.IdentificadorPlacas;
-import src.desafio.IdentificadorPlacasView;
-import src.desafio.LeitorRelogio;
-import src.desafio.LeitorRelogioView;
-import src.desafio.ReconhecedorLetras;
-import src.desafio.ReconhecedorLetrasView;
-import src.filtros.BordasdeSobel;
-import src.filtros.Brilho;
-import src.filtros.BrilhoView;
-import src.filtros.Contraste;
-import src.filtros.ContrasteView;
-import src.filtros.FiltrodaMediana;
-import src.filtros.FiltrodeGaus;
-import src.filtros.Grayscale;
-import src.filtros.Limiarizacao;
-import src.filtros.LimiarizacaoView;
-import src.filtros.Marrhildreth;
-import src.filtros.Marrhildrethview;
-import src.filtros.Robinson;
-import src.morfologia.Abertura;
-import src.morfologia.Dilatacao;
-import src.morfologia.Erosao;
-import src.morfologia.Fechamento;
-import src.afinamento.ZhangSuen;
-import src.afinamento.ZhangSuenView;
-import src.transformacoes.Escala;
-import src.transformacoes.EscalaView;
-import src.transformacoes.Espelhamento;
-import src.transformacoes.EspelhamentoView;
-import src.transformacoes.Rotacionar;
-import src.transformacoes.RotacionarView;
-import src.transformacoes.Transladar;
-import src.transformacoes.TransladarView;
-
+/** The desktop workspace coordinates presentation and the existing image services. */
 public class Painel extends JFrame {
-
-    private static final Color COR_BG_PRIMARIO   = new Color(0xFFFFFF);
-    private static final Color COR_BG_SECUNDARIO = new Color(0xF5F5F3);
-    private static final Color COR_BG_CANVAS     = new Color(0xEBEAE6);
-    private static final Color COR_BORDA         = new Color(0xD3D1C7);
-    private static final Color COR_TEXTO_PRIMARIO= new Color(0x2C2C2A);
-    private static final Color COR_TEXTO_MUTED   = new Color(0x888780);
-    private static final Color COR_ACCENT        = new Color(0x185FA5);
-
+    private static final Logger LOG = Logger.getLogger(Painel.class.getName());
     private final EditorSession session = new EditorSession();
     private final ImageFiles imageFiles = new ImageFiles();
-    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(Painel.class.getName());
+    private final Map<String, Action> actions = new LinkedHashMap<>();
+    private final Set<Action> imageActions = new HashSet<>();
+    private final List<ToolSidebar.Group> groups = new ArrayList<>();
     private boolean busy;
-    private final java.util.Map<Component, Boolean> enabledBeforeWork = new java.util.IdentityHashMap<>();
+    private boolean fit = true;
+    private Boolean compactOverride;
     private String arquivoAberto = "";
 
-    private ImagemPanel lblOriginalImg;
-    private ImagemPanel lblTransformedImg;
-    private JButton btnDesfazer;
-    private JLabel lblStatus;
+    private final ImageCanvas original = new ImageCanvas("Imagem original");
+    private final ImageCanvas result = new ImageCanvas("Imagem resultante");
+    private final JLabel status = Theme.label("Nenhuma imagem carregada", Theme.SMALL, Theme.MUTED);
+    private final JLabel document = Theme.label("Nenhuma imagem aberta", Theme.SMALL, Theme.MUTED);
+    private final JLabel originalSize = Theme.label("", Theme.SMALL, Theme.MUTED);
+    private final JLabel resultSize = Theme.label("", Theme.SMALL, Theme.MUTED);
+    private final JProgressBar progress = new JProgressBar();
+    private final CardLayout cards = new CardLayout();
+    private final JPanel canvasCards = Theme.panel(cards, Theme.PAPER);
+    private final JSplitPane comparison = new JSplitPane();
+    private final JPanel feedback = Theme.panel(new BorderLayout(Theme.LG, Theme.SM), Theme.PAPER);
+    private final JLabel feedbackTitle = Theme.label("", Theme.SECTION, Theme.TEXT);
+    private final JLabel feedbackState = Theme.label("", Theme.SMALL, Theme.MUTED);
+    private final JTextArea feedbackText = Theme.text("");
+    private ToolSidebar sidebar;
+    private AppButton fitButton;
+    private AppButton openButton;
 
-    // Filtros / Transformações
-    private final Rotacionar      rotacionar    = new Rotacionar();
-    private final Transladar      transladar    = new Transladar();
-    private final Espelhamento    espelhamento  = new Espelhamento();
-    private final Escala          escala        = new Escala();
-    private final Grayscale       grayscale     = new Grayscale();
-    private final Brilho          brilho        = new Brilho();
-    private final Contraste       contraste     = new Contraste();
-    private final Limiarizacao    limiarizacao  = new Limiarizacao();
-    private final FiltrodaMediana filtroMediana = new FiltrodaMediana();
-    private final FiltrodeGaus    filtroGaus    = new FiltrodeGaus();
-    private final BordasdeSobel   bordasSobel   = new BordasdeSobel();
-    private final Robinson        robinson      = new Robinson();
-    private final Dilatacao       dilatacao     = new Dilatacao();
-    private final Erosao          erosao        = new Erosao();
-    private final Abertura        abertura      = new Abertura();
-    private final Fechamento      fechamento    = new Fechamento();
-    private final ZhangSuen       zhangSuen     = new ZhangSuen();
-
-    // Extração de Características (Desafio)
-    // Injeção das classes existentes do projeto nas classes de extração
-    private final LeitorRelogio      leitorRelogio      = new LeitorRelogio(grayscale, limiarizacao, zhangSuen);
-    private final ContadorObjetos    contadorObjetos    = new ContadorObjetos(filtroMediana);
-    private final ReconhecedorLetras reconhecedorLetras = new ReconhecedorLetras(grayscale, limiarizacao, filtroMediana);
-    private final IdentificadorPlacas identificadorPlacas = new IdentificadorPlacas();
-    private final AnalisadorBarras   analisadorBarras   = new AnalisadorBarras(grayscale, limiarizacao);
+    private final Grayscale grayscale = new Grayscale();
+    private final Limiarizacao limiarizacao = new Limiarizacao();
+    private final FiltrodaMediana mediana = new FiltrodaMediana();
+    private final ZhangSuen thinning = new ZhangSuen();
+    private final LeitorRelogio clock = new LeitorRelogio(grayscale, limiarizacao, thinning);
+    private final ContadorObjetos objects = new ContadorObjetos(mediana);
+    private final ReconhecedorLetras letters =
+            new ReconhecedorLetras(grayscale, limiarizacao, mediana);
+    private final IdentificadorPlacas signs = new IdentificadorPlacas();
+    private final AnalisadorBarras bars = new AnalisadorBarras(grayscale, limiarizacao);
 
     public Painel() {
-        super("Sistema de Processamento de Imagens");
-        setSize(1100, 720);
-        setMinimumSize(new Dimension(800, 550));
+        super("PDI · Processamento de imagens");
+        Theme.install();
+        setName("pdi.workspace");
+        setSize(1240, 820);
+        setMinimumSize(new Dimension(760, 520));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new BorderLayout(0, 0));
-        getContentPane().setBackground(COR_BG_PRIMARIO);
-        configurarMenuBar();
-        configurarCanvasArea();
-        configurarStatusBar();
-        configurarArrastarImagem();
-        // Abre a janela já maximizada (tela cheia)
-        setExtendedState(JFrame.MAXIMIZED_BOTH);
+        setLayout(new BorderLayout());
+        registerActions();
+        setJMenuBar(createMenus());
+        sidebar =
+                new ToolSidebar(
+                        groups,
+                        () -> {
+                            compactOverride = !sidebar.isCompact();
+                            adaptLayout();
+                        });
+        add(sidebar, BorderLayout.WEST);
+        JPanel workspace = Theme.panel(new BorderLayout(0, Theme.LG), Theme.PAPER);
+        workspace.setBorder(new EmptyBorder(Theme.XL, Theme.XL, Theme.LG, Theme.XL));
+        workspace.add(createHeader(), BorderLayout.NORTH);
+        JPanel body = Theme.panel(new BorderLayout(0, Theme.LG), Theme.PAPER);
+        createCanvas();
+        body.add(canvasCards, BorderLayout.CENTER);
+        createFeedback();
+        body.add(feedback, BorderLayout.SOUTH);
+        workspace.add(body, BorderLayout.CENTER);
+        workspace.add(createStatus(), BorderLayout.SOUTH);
+        add(workspace, BorderLayout.CENTER);
+        configureDrop();
+        installShortcuts();
+        updateState();
+        addComponentListener(
+                new ComponentAdapter() {
+                    @Override
+                    public void componentResized(ComponentEvent e) {
+                        adaptLayout();
+                    }
+                });
+        adaptLayout();
+        setLocationRelativeTo(null);
     }
 
-    private void configurarMenuBar() {
-        JMenuBar menuBar = new JMenuBar();
-        menuBar.setBackground(COR_BG_PRIMARIO);
-        menuBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COR_BORDA));
-
-        // Arquivo
-        JMenu menuArquivo = menuEstilizado("Arquivo");
-        menuArquivo.add(menuItem("Abrir imagem",  e -> abrirImagem()));
-        menuArquivo.add(menuItem("Salvar imagem", e -> salvarImagem()));
-        menuArquivo.add(menuItem("Sobre",         e -> mostrarSobre()));
-        menuArquivo.addSeparator();
-        menuArquivo.add(menuItem("Sair",          e -> System.exit(0)));
-
-        // Transformações Geométricas
-        JMenu menuTransformacoes = menuEstilizado("Transformações Geométricas");
-        menuTransformacoes.add(menuItem("Rotacionar", e -> abrirDialog(
-                new RotacionarView(p -> aplicarTransformacao(img -> rotacionar.rotacionarImagem(img, p[0], p[1]==1))), "Rotacionar")));
-        menuTransformacoes.add(menuItem("Transladar", e -> abrirDialog(
-                new TransladarView(p -> aplicarTransformacao(img -> transladar.transladarImagem(img, p[0], p[1]))), "Transladar")));
-        menuTransformacoes.add(menuItem("Espelhar", e -> abrirDialog(
-                new EspelhamentoView(p -> aplicarTransformacao(img -> espelhamento.espelharImagem(img, p[0], p[1]))), "Espelhar")));
-        menuTransformacoes.add(menuItem("Escala", e -> abrirDialog(
-                new EscalaView(f -> aplicarTransformacao(img -> escala.aplicarEscala(img, f))), "Escala")));
-
-        // Filtros
-        JMenu menuFiltros = menuEstilizado("Filtros");
-        menuFiltros.add(menuItem("Grayscale", e -> { if(verificarImagem()) aplicarTransformacao(img -> grayscale.aplicarGrayscale(img)); }));
-        menuFiltros.add(menuItem("Mediana",   e -> { if(verificarImagem()) aplicarTransformacao(img -> filtroMediana.aplicarFiltroMediana(img)); }));
-        menuFiltros.add(menuItem("Gaussiano", e -> { if(verificarImagem()) aplicarTransformacao(img -> filtroGaus.aplicarFiltro(img)); }));
-        menuFiltros.add(menuItem("Sobel",     e -> { if(verificarImagem()) aplicarTransformacao(img -> bordasSobel.aplicarFiltro(img)); }));
-        menuFiltros.add(menuItem("Robinson",  e -> { if(verificarImagem()) aplicarTransformacao(img -> robinson.aplicarFiltro(img)); }));
-        menuFiltros.add(menuItem("Marr-Hildreth (LoG)", e -> abrirDialog(
-                new Marrhildrethview((sigma, limiar) ->
-                    aplicarTransformacao(img -> new Marrhildreth(sigma, limiar).aplicarFiltro(img))), "Marr-Hildreth")));
-        menuFiltros.addSeparator();
-        menuFiltros.add(menuItem("Brilho",    e -> abrirDialog(new BrilhoView(v -> aplicarTransformacao(img -> brilho.aplicarBrilho(img, v))), "Brilho")));
-        menuFiltros.add(menuItem("Contraste", e -> abrirDialog(new ContrasteView(f -> aplicarTransformacao(img -> contraste.aplicarContraste(img, f))), "Contraste")));
-        menuFiltros.add(menuItem("Threshold", e -> abrirDialog(new LimiarizacaoView(t -> aplicarTransformacao(img -> limiarizacao.aplicarLimiarizacao(img, t))), "Threshold")));
-
-        // Morfologia
-        JMenu menuMorfologia = menuEstilizado("Morfologia Matemática");
-        menuMorfologia.add(menuItem("Dilatação",  e -> { if(verificarImagem()) aplicarTransformacao(img -> dilatacao.aplicarFiltro(img)); }));
-        menuMorfologia.add(menuItem("Erosão",     e -> { if(verificarImagem()) aplicarTransformacao(img -> erosao.aplicarFiltro(img)); }));
-        menuMorfologia.add(menuItem("Abertura",   e -> { if(verificarImagem()) aplicarTransformacao(img -> abertura.aplicarFiltro(img)); }));
-        menuMorfologia.add(menuItem("Fechamento", e -> { if(verificarImagem()) aplicarTransformacao(img -> fechamento.aplicarFiltro(img)); }));
-
-        // Afinamento
-        JMenu menuAfinamento = menuEstilizado("Afinamento");
-        menuAfinamento.add(menuItem("Zhang-Suen", e -> abrirDialog(
-                new ZhangSuenView(() -> aplicarTransformacao(img -> zhangSuen.aplicarThinning(img))), "Zhang-Suen")));
-
-        // ----------------------------------------------------------------
-        // Extração de Características — DESAFIO
-        // ----------------------------------------------------------------
-        JMenu menuExtracao = menuEstilizado("Exercícios");
-
-        // Ex 1 — Relógio Analógico
-        menuExtracao.add(menuItem("Ex.1 — Ler Relógio Analógico", e -> abrirDialogExtracao(
-                new LeitorRelogioView(() -> {
-                    if (!verificarImagem()) return;
-                    executarAnalise("Horário identificado", leitorRelogio::evaluate);
-                }), "Ler Relógio Analógico")));
-
-        // Ex 2 — Contagem de Objetos Coloridos
-        menuExtracao.add(menuItem("Ex.2 — Contar Objetos Coloridos", e -> abrirDialogExtracao(
-                new ContadorObjetosView(() -> {
-                    if (!verificarImagem()) return;
-                    executarAnalise("Objetos por cor", contadorObjetos::evaluate);
-                }), "Contar Objetos Coloridos")));
-
-        // Ex 3 — Reconhecimento de Letras
-        menuExtracao.add(menuItem("Ex.3 — Reconhecer Letras (A–Z)", e -> abrirDialogExtracao(
-                new ReconhecedorLetrasView(() -> {
-                    if (!verificarImagem()) return;
-                    executarAnalise("Letras encontradas", reconhecedorLetras::evaluate);
-                }), "Reconhecer Letras")));
-
-        // Ex 4 — Identificação de Placas
-        menuExtracao.add(menuItem("Ex.4 — Identificar Placas de Trânsito", e -> abrirDialogExtracao(
-                new IdentificadorPlacasView(() -> {
-                    if (!verificarImagem()) return;
-                    executarAnalise("Placas identificadas", identificadorPlacas::evaluate);
-                }), "Identificar Placas de Trânsito")));
-
-        // Ex 5 — Análise de Barras
-        menuExtracao.add(menuItem("Ex.5 — Analisar Barras Verticais", e -> abrirDialogExtracao(
-                new AnalisadorBarrasView(() -> {
-                    if (!verificarImagem()) return;
-                    executarAnalise("Análise de barras", analisadorBarras::evaluate);
-                }), "Analisar Barras Verticais")));
-
-        menuBar.add(menuArquivo);
-        menuBar.add(menuTransformacoes);
-        menuBar.add(menuFiltros);
-        menuBar.add(menuMorfologia);
-        menuBar.add(menuAfinamento);
-        menuBar.add(menuExtracao);
-        setJMenuBar(menuBar);
+    private Action action(
+            String id, String title, String description, boolean needsImage, Runnable callback) {
+        Action action =
+                new AbstractAction(title) {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        if (isEnabled()) callback.run();
+                    }
+                };
+        action.putValue(Action.ACTION_COMMAND_KEY, id);
+        action.putValue(Action.SHORT_DESCRIPTION, description);
+        actions.put(id, action);
+        if (needsImage) imageActions.add(action);
+        return action;
     }
 
-    // ----------------------------------------------------------------
-    // Canvas
-    // ----------------------------------------------------------------
-    private void configurarCanvasArea() {
-        JPanel paneOriginal     = criarPainelImagem("Original");
-        JPanel paneTransformado = criarPainelImagem("Resultado");
-        lblOriginalImg    = labelImagem(paneOriginal);
-        lblTransformedImg = labelImagem(paneTransformado);
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, paneOriginal, paneTransformado);
-        split.setDividerLocation(0.5); split.setResizeWeight(0.5);
-        split.setDividerSize(1); split.setBorder(null); split.setBackground(COR_BG_CANVAS);
-        add(split, BorderLayout.CENTER);
+    private Action transform(
+            String id, String title, String description, UnaryOperator<BufferedImage> operation) {
+        return action(id, title, description, true, () -> applyTransform(operation));
     }
 
-    private JPanel criarPainelImagem(String titulo) {
-        JPanel pane = new JPanel(new BorderLayout());
-        pane.setBackground(COR_BG_CANVAS);
-        JLabel lbl = new JLabel(titulo);
-        lbl.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        lbl.setForeground(COR_TEXTO_MUTED);
-        lbl.setBorder(new EmptyBorder(8,12,8,12));
-        lbl.setOpaque(true); lbl.setBackground(COR_BG_CANVAS);
-        pane.add(lbl, BorderLayout.NORTH);
-        return pane;
+    private Action parameters(String id, String title, String description, Supplier<JPanel> form) {
+        return action(
+                id,
+                title,
+                description,
+                true,
+                () -> Dialogs.parameters(this, title, form.get()).setVisible(true));
     }
 
-    private ImagemPanel labelImagem(JPanel pane) {
-        ImagemPanel painel = new ImagemPanel(COR_BG_CANVAS);
-        pane.add(painel, BorderLayout.CENTER);
-        return painel;
+    private Action analysis(
+            String id,
+            String title,
+            String description,
+            Function<BufferedImage, AnalysisResult> operation) {
+        return action(id, title, description, true, () -> runAnalysis(title, operation));
     }
 
+    private void registerActions() {
+        action(
+                "open",
+                "Abrir imagem",
+                "Abrir um arquivo de imagem · " + Theme.shortcutHint("O"),
+                false,
+                this::openImage);
+        action(
+                "save",
+                "Exportar PNG",
+                "Salvar a imagem atual em PNG · " + Theme.shortcutHint("S"),
+                true,
+                this::saveImage);
+        action(
+                "undo",
+                "Desfazer",
+                "Desfazer a última operação · " + Theme.shortcutHint("Z"),
+                true,
+                this::undo);
+        action(
+                "reset",
+                "Resetar",
+                "Voltar à imagem original · " + Theme.shortcutHint("Shift+R"),
+                true,
+                this::reset);
+        action(
+                "about",
+                "Sobre o PDI",
+                "Informações sobre o projeto · F1",
+                false,
+                () ->
+                        Dialogs.message(
+                                this,
+                                "Sobre o PDI",
+                                "Processamento Digital de Imagens\n"
+                                        + "Fernando Hubner Silva · versão 1.7\n\n"
+                                        + "Um espaço para experimentar transformações, filtros e"
+                                        + " análise de imagens."));
+        action("exit", "Sair", "Encerrar o aplicativo", false, () -> System.exit(0));
+        groups.add(
+                new ToolSidebar.Group(
+                        "Transformar",
+                        LineIcon.Kind.TRANSFORM,
+                        List.of(
+                                parameters(
+                                        "rotate",
+                                        "Rotacionar",
+                                        "Girar a imagem em qualquer direção",
+                                        () ->
+                                                new RotacionarView(
+                                                        p ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Rotacionar()
+                                                                                        .rotacionarImagem(
+                                                                                                i,
+                                                                                                p[
+                                                                                                        0],
+                                                                                                p[1]
+                                                                                                        == 1)))),
+                                parameters(
+                                        "translate",
+                                        "Transladar",
+                                        "Deslocar a imagem na área atual",
+                                        () ->
+                                                new TransladarView(
+                                                        p ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Transladar()
+                                                                                        .transladarImagem(
+                                                                                                i,
+                                                                                                p[
+                                                                                                        0],
+                                                                                                p[
+                                                                                                        1])))),
+                                parameters(
+                                        "mirror",
+                                        "Espelhar",
+                                        "Inverter os eixos da imagem",
+                                        () ->
+                                                new EspelhamentoView(
+                                                        p ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Espelhamento()
+                                                                                        .espelharImagem(
+                                                                                                i,
+                                                                                                p[
+                                                                                                        0],
+                                                                                                p[
+                                                                                                        1])))),
+                                parameters(
+                                        "scale",
+                                        "Escala",
+                                        "Aumentar ou reduzir a imagem",
+                                        () ->
+                                                new EscalaView(
+                                                        f ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Escala()
+                                                                                        .aplicarEscala(
+                                                                                                i,
+                                                                                                f)))))));
+        groups.add(
+                new ToolSidebar.Group(
+                        "Filtros",
+                        LineIcon.Kind.FILTER,
+                        List.of(
+                                transform(
+                                        "grayscale",
+                                        "Escala de cinza",
+                                        "Converter cores em tons de cinza",
+                                        grayscale::aplicarGrayscale),
+                                transform(
+                                        "median",
+                                        "Mediana",
+                                        "Reduzir ruídos locais",
+                                        mediana::aplicarFiltroMediana),
+                                transform(
+                                        "gaussian",
+                                        "Gaussiano",
+                                        "Suavizar a imagem",
+                                        i -> new FiltrodeGaus().aplicarFiltro(i)),
+                                transform(
+                                        "sobel",
+                                        "Sobel",
+                                        "Detectar contornos",
+                                        i -> new BordasdeSobel().aplicarFiltro(i)),
+                                transform(
+                                        "robinson",
+                                        "Robinson",
+                                        "Detectar contornos direcionais",
+                                        i -> new Robinson().aplicarFiltro(i)),
+                                parameters(
+                                        "log",
+                                        "Marr–Hildreth",
+                                        "Detectar contornos com suavização",
+                                        () ->
+                                                new Marrhildrethview(
+                                                        (s, t) ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Marrhildreth(
+                                                                                                s,
+                                                                                                t)
+                                                                                        .aplicarFiltro(
+                                                                                                i)))),
+                                parameters(
+                                        "brightness",
+                                        "Brilho",
+                                        "Clarear ou escurecer",
+                                        () ->
+                                                new BrilhoView(
+                                                        v ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Brilho()
+                                                                                        .aplicarBrilho(
+                                                                                                i,
+                                                                                                v)))),
+                                parameters(
+                                        "contrast",
+                                        "Contraste",
+                                        "Ajustar áreas claras e escuras",
+                                        () ->
+                                                new ContrasteView(
+                                                        v ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                new Contraste()
+                                                                                        .aplicarContraste(
+                                                                                                i,
+                                                                                                v)))),
+                                parameters(
+                                        "threshold",
+                                        "Limiarização",
+                                        "Separar áreas claras e escuras",
+                                        () ->
+                                                new LimiarizacaoView(
+                                                        t ->
+                                                                applyTransform(
+                                                                        i ->
+                                                                                limiarizacao
+                                                                                        .aplicarLimiarizacao(
+                                                                                                i,
+                                                                                                t)))))));
+        groups.add(
+                new ToolSidebar.Group(
+                        "Morfologia",
+                        LineIcon.Kind.MORPHOLOGY,
+                        List.of(
+                                transform(
+                                        "dilate",
+                                        "Dilatação",
+                                        "Expandir regiões claras",
+                                        i -> new Dilatacao().aplicarFiltro(i)),
+                                transform(
+                                        "erode",
+                                        "Erosão",
+                                        "Reduzir regiões claras",
+                                        i -> new Erosao().aplicarFiltro(i)),
+                                transform(
+                                        "opening",
+                                        "Abertura",
+                                        "Erosão seguida de dilatação",
+                                        i -> new Abertura().aplicarFiltro(i)),
+                                transform(
+                                        "closing",
+                                        "Fechamento",
+                                        "Dilatação seguida de erosão",
+                                        i -> new Fechamento().aplicarFiltro(i)))));
+        groups.add(
+                new ToolSidebar.Group(
+                        "Afinamento",
+                        LineIcon.Kind.THINNING,
+                        List.of(
+                                transform(
+                                        "thinning",
+                                        "Zhang–Suen",
+                                        "Reduzir regiões escuras a linhas finas",
+                                        thinning::aplicarThinning))));
+        groups.add(
+                new ToolSidebar.Group(
+                        "Analisar",
+                        LineIcon.Kind.ANALYZE,
+                        List.of(
+                                analysis(
+                                        "clock",
+                                        "Ler relógio",
+                                        "Horário de um relógio analógico",
+                                        clock::evaluate),
+                                analysis(
+                                        "objects",
+                                        "Contar objetos",
+                                        "Formas e cores na imagem",
+                                        objects::evaluate),
+                                analysis(
+                                        "letters",
+                                        "Reconhecer letras",
+                                        "Letras maiúsculas de A a Z",
+                                        letters::evaluate),
+                                analysis(
+                                        "signs",
+                                        "Identificar placas",
+                                        "Candidatos a placas de trânsito",
+                                        signs::evaluate),
+                                analysis(
+                                        "bars",
+                                        "Analisar barras",
+                                        "Maior e menor valor do gráfico",
+                                        bars::evaluate))));
+    }
 
-    private static class ImagemPanel extends JPanel {
-        private BufferedImage imagem;
-
-        ImagemPanel(Color fundo) {
-            setBackground(fundo);
+    private JMenuBar createMenus() {
+        JMenuBar menu = new JMenuBar();
+        menu.setBackground(Theme.SIDEBAR);
+        menu.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.BORDER));
+        JMenu file = new JMenu("Arquivo");
+        file.setMnemonic(KeyEvent.VK_A);
+        file.add(new JMenuItem(actions.get("open")));
+        file.add(new JMenuItem(actions.get("save")));
+        file.addSeparator();
+        file.add(new JMenuItem(actions.get("about")));
+        file.add(new JMenuItem(actions.get("exit")));
+        menu.add(file);
+        int[] mnemonics = {
+            KeyEvent.VK_T, KeyEvent.VK_F, KeyEvent.VK_M, KeyEvent.VK_I, KeyEvent.VK_N
+        };
+        for (int i = 0; i < groups.size(); i++) {
+            ToolSidebar.Group group = groups.get(i);
+            JMenu category = new JMenu(group.name());
+            category.setMnemonic(mnemonics[i]);
+            for (Action action : group.tools()) category.add(new JMenuItem(action));
+            menu.add(category);
         }
+        return menu;
+    }
 
-        void setImagem(BufferedImage img) {
-            this.imagem = img;
-            repaint();
+    private AppButton button(String id, LineIcon.Kind icon, AppButton.Style style) {
+        AppButton button =
+                new AppButton((String) actions.get(id).getValue(Action.NAME), icon, style);
+        button.setAction(actions.get(id));
+        if (icon != null) button.setIcon(new LineIcon(icon));
+        button.setName("action." + id);
+        return button;
+    }
+
+    private JPanel createHeader() {
+        JPanel header = Theme.panel(new BorderLayout(), Theme.PAPER);
+        JPanel title = Theme.panel(new BorderLayout(0, Theme.XS), Theme.PAPER);
+        title.add(Theme.label("Editor de imagem", Theme.TITLE, Theme.TEXT), BorderLayout.NORTH);
+        document.setName("workspace.document");
+        document.putClientProperty("html.disable", true);
+        title.add(document, BorderLayout.SOUTH);
+        JPanel row = Theme.panel(new BorderLayout(Theme.LG, 0), Theme.PAPER);
+        row.add(title, BorderLayout.CENTER);
+        JPanel files = Theme.panel(new FlowLayout(FlowLayout.RIGHT, Theme.SM, 0), Theme.PAPER);
+        openButton = button("open", LineIcon.Kind.OPEN, AppButton.Style.SECONDARY);
+        files.add(openButton);
+        files.add(button("save", LineIcon.Kind.EXPORT, AppButton.Style.PRIMARY));
+        row.add(files, BorderLayout.EAST);
+        row.setBorder(new EmptyBorder(0, 0, Theme.LG, 0));
+        header.add(row, BorderLayout.NORTH);
+        JPanel tools = Theme.panel(new BorderLayout(), Theme.PAPER);
+        JPanel edits = Theme.panel(new FlowLayout(FlowLayout.LEFT, Theme.XS, 0), Theme.PAPER);
+        edits.add(button("undo", LineIcon.Kind.UNDO, AppButton.Style.GHOST));
+        edits.add(button("reset", LineIcon.Kind.RESET, AppButton.Style.GHOST));
+        tools.add(edits, BorderLayout.WEST);
+        fitButton = new AppButton("Ajustar à área", LineIcon.Kind.FIT, AppButton.Style.GHOST);
+        fitButton.setName("view.fit");
+        fitButton.setToolTipText(
+                "Alternar entre ajustar à área e tamanho real. "
+                        + Theme.shortcutHint("0")
+                        + " para ajustar.");
+        fitButton.addActionListener(e -> setFit(!fit));
+        tools.add(fitButton, BorderLayout.EAST);
+        JPanel toolbar = Theme.panel(new BorderLayout(0, Theme.MD), Theme.PAPER);
+        toolbar.add(tools, BorderLayout.CENTER);
+        progress.setName("workspace.progress");
+        progress.setPreferredSize(new Dimension(0, 3));
+        progress.setBorderPainted(false);
+        progress.setForeground(Theme.ACCENT);
+        progress.setBackground(Theme.PAPER);
+        progress.getAccessibleContext().setAccessibleName("Progresso da operação");
+        toolbar.add(progress, BorderLayout.SOUTH);
+        header.add(toolbar, BorderLayout.SOUTH);
+        return header;
+    }
+
+    private void createCanvas() {
+        comparison.setName("workspace.comparison");
+        comparison.setLeftComponent(imagePane("Original", original, originalSize));
+        comparison.setRightComponent(imagePane("Resultado", result, resultSize));
+        Theme.splitter(comparison);
+        comparison.setContinuousLayout(true);
+        comparison.setResizeWeight(.5);
+        comparison.setDividerSize(Theme.XS);
+        comparison.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
+        comparison.setBackground(Theme.BORDER);
+        JPanel empty = Theme.panel(new GridBagLayout(), Theme.CANVAS);
+        empty.setName("workspace.empty");
+        JPanel message = Theme.panel(new GridBagLayout(), Theme.CANVAS);
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = 0;
+        c.insets = new Insets(0, 0, Theme.LG, 0);
+        JLabel icon = new JLabel(new LineIcon(LineIcon.Kind.IMAGE, 36));
+        icon.setForeground(Theme.MUTED);
+        message.add(icon, c);
+        c.gridy++;
+        message.add(Theme.label("Abra uma imagem para começar", Theme.SECTION, Theme.TEXT), c);
+        c.gridy++;
+        message.add(
+                Theme.label(
+                        "Compare o original e o resultado em um só lugar.",
+                        Theme.BODY,
+                        Theme.MUTED),
+                c);
+        c.gridy++;
+        message.add(button("open", LineIcon.Kind.OPEN, AppButton.Style.SECONDARY), c);
+        c.gridy++;
+        c.insets = new Insets(0, 0, 0, 0);
+        message.add(
+                Theme.label("ou arraste um arquivo para esta área", Theme.SMALL, Theme.MUTED), c);
+        empty.add(message);
+        canvasCards.add(empty, "empty");
+        canvasCards.add(comparison, "image");
+        cards.show(canvasCards, "empty");
+    }
+
+    private JPanel imagePane(String title, ImageCanvas canvas, JLabel size) {
+        JPanel panel = Theme.panel(new BorderLayout(), Theme.CANVAS);
+        panel.setMinimumSize(new Dimension(0, 0));
+        JPanel heading = Theme.panel(new BorderLayout(Theme.MD, 0), Theme.PAPER);
+        heading.setBorder(new EmptyBorder(Theme.MD, Theme.LG, Theme.MD, Theme.LG));
+        heading.add(Theme.label(title, Theme.SECTION, Theme.TEXT), BorderLayout.WEST);
+        heading.add(size, BorderLayout.EAST);
+        panel.add(heading, BorderLayout.NORTH);
+        JScrollPane scroll = Theme.scroll(canvas);
+        panel.add(scroll, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private void createFeedback() {
+        feedback.setName("workspace.feedback");
+        feedback.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER),
+                        new EmptyBorder(Theme.LG, 0, 0, 0)));
+        JPanel heading = Theme.panel(new BorderLayout(Theme.MD, 0), Theme.PAPER);
+        heading.add(feedbackTitle, BorderLayout.CENTER);
+        JPanel side = Theme.panel(new FlowLayout(FlowLayout.RIGHT, Theme.SM, 0), Theme.PAPER);
+        side.add(feedbackState);
+        AppButton dismiss = new AppButton("", LineIcon.Kind.CLOSE, AppButton.Style.GHOST);
+        dismiss.setName("feedback.dismiss");
+        dismiss.setToolTipText("Fechar mensagem");
+        dismiss.getAccessibleContext().setAccessibleName("Fechar mensagem");
+        dismiss.addActionListener(e -> dismissFeedback());
+        side.add(dismiss);
+        heading.add(side, BorderLayout.EAST);
+        feedback.add(heading, BorderLayout.NORTH);
+        feedbackText.setName("feedback.message");
+        feedbackText.setRows(2);
+        feedbackText.getAccessibleContext().setAccessibleName("Resultado ou mensagem da operação");
+        JScrollPane scroll = Theme.scroll(feedbackText);
+        feedback.add(scroll, BorderLayout.CENTER);
+        feedback.setVisible(false);
+    }
+
+    private JPanel createStatus() {
+        JPanel bar = Theme.panel(new BorderLayout(), Theme.PAPER);
+        status.setName("workspace.status");
+        status.putClientProperty("html.disable", true);
+        status.getAccessibleContext().setAccessibleName("Estado da imagem");
+        bar.add(status, BorderLayout.CENTER);
+        return bar;
+    }
+
+    private void adaptLayout() {
+        if (sidebar == null) return;
+        boolean compact = compactOverride == null ? getWidth() < Theme.COMPACT_AT : compactOverride;
+        sidebar.setCompact(compact);
+        int available =
+                getWidth() - (compact ? Theme.RAIL_WIDTH : Theme.SIDEBAR_WIDTH) - 2 * Theme.XL;
+        int orientation =
+                available < Theme.STACK_AT_WIDTH && getHeight() >= Theme.STACK_MIN_HEIGHT
+                        ? JSplitPane.VERTICAL_SPLIT
+                        : JSplitPane.HORIZONTAL_SPLIT;
+        if (comparison.getOrientation() != orientation) {
+            comparison.setOrientation(orientation);
+            comparison.setDividerLocation(.5);
         }
+        revalidate();
+    }
 
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            if (imagem == null) return;
+    private void setFit(boolean value) {
+        fit = value;
+        original.setFit(fit);
+        result.setFit(fit);
+        fitButton.setText(fit ? "Ajustar à área" : "Tamanho real · 100%");
+        fitButton
+                .getAccessibleContext()
+                .setAccessibleDescription(
+                        fit
+                                ? "Imagem ajustada à área disponível"
+                                : "Um pixel da imagem por pixel da tela");
+    }
 
-            int pw = getWidth();
-            int ph = getHeight();
-            int iw = imagem.getWidth();
-            int ih = imagem.getHeight();
-            if (pw <= 0 || ph <= 0 || iw <= 0 || ih <= 0) return;
+    private void installShortcuts() {
+        getRootPane()
+                .registerKeyboardAction(
+                        e -> {
+                            if (feedback.isVisible()) dismissFeedback();
+                        },
+                        KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW);
+        int shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        bind("open", KeyEvent.VK_O, shortcut);
+        bind("save", KeyEvent.VK_S, shortcut);
+        bind("undo", KeyEvent.VK_Z, shortcut);
+        bind("reset", KeyEvent.VK_R, shortcut | InputEvent.SHIFT_DOWN_MASK);
+        getRootPane()
+                .registerKeyboardAction(
+                        e -> {
+                            compactOverride = !sidebar.isCompact();
+                            adaptLayout();
+                        },
+                        KeyStroke.getKeyStroke(KeyEvent.VK_B, shortcut),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW);
+        getRootPane()
+                .registerKeyboardAction(
+                        e -> setFit(true),
+                        KeyStroke.getKeyStroke(KeyEvent.VK_0, shortcut),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW);
+        getRootPane()
+                .registerKeyboardAction(
+                        e -> actions.get("about").actionPerformed(e),
+                        KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0),
+                        JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
 
-            double escala = Math.min((double) pw / iw, (double) ph / ih);
-            int novaW = Math.max(1, (int) Math.round(iw * escala));
-            int novaH = Math.max(1, (int) Math.round(ih * escala));
-            int x = (pw - novaW) / 2;
-            int y = (ph - novaH) / 2;
+    private void dismissFeedback() {
+        feedback.setVisible(false);
+        if (fitButton.isEnabled()) fitButton.requestFocusInWindow();
+        else openButton.requestFocusInWindow();
+    }
 
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g2.drawImage(imagem, x, y, novaW, novaH, null);
-            g2.dispose();
+    private void bind(String id, int key, int modifiers) {
+        KeyStroke stroke = KeyStroke.getKeyStroke(key, modifiers);
+        actions.get(id).putValue(Action.ACCELERATOR_KEY, stroke);
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(stroke, id);
+        getRootPane().getActionMap().put(id, actions.get(id));
+    }
+
+    private void updateState() {
+        for (Action action : actions.values())
+            action.setEnabled(!busy && (!imageActions.contains(action) || session.hasImage()));
+        actions.get("undo").setEnabled(!busy && session.canUndo());
+        fitButton.setEnabled(session.hasImage());
+        for (int i = 0; i < getJMenuBar().getMenuCount(); i++)
+            getJMenuBar().getMenu(i).setEnabled(!busy);
+        if (!session.hasImage()) {
+            status.setText("Nenhuma imagem carregada");
+            return;
         }
-    }
-
-    // ----------------------------------------------------------------
-    // Status bar
-    // ----------------------------------------------------------------
-    private void configurarStatusBar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setBackground(COR_BG_PRIMARIO);
-        bar.setBorder(BorderFactory.createMatteBorder(1,0,0,0,COR_BORDA));
-        bar.setPreferredSize(new Dimension(0,40));
-
-        JPanel esquerda = new JPanel(new FlowLayout(FlowLayout.LEFT,6,6));
-        esquerda.setOpaque(false);
-        btnDesfazer = statusBotao("↩  Desfazer");
-        btnDesfazer.setEnabled(false);
-        btnDesfazer.addActionListener(e -> desfazer());
-        JButton btnResetar = statusBotao("Resetar");
-        btnResetar.addActionListener(e -> resetar());
-        esquerda.add(btnDesfazer); esquerda.add(btnResetar);
-
-        lblStatus = new JLabel("Nenhuma imagem carregada");
-        lblStatus.setFont(new Font(Font.SANS_SERIF, Font.PLAIN,12));
-        lblStatus.setForeground(COR_TEXTO_MUTED);
-        lblStatus.setHorizontalAlignment(SwingConstants.CENTER);
-
-        JPanel direita = new JPanel(new FlowLayout(FlowLayout.RIGHT,8,6));
-        direita.setOpaque(false);
-        JButton btnSalvar = statusBotao("Salvar imagem");
-        btnSalvar.setForeground(COR_ACCENT);
-        btnSalvar.addActionListener(e -> salvarImagem());
-        direita.add(btnSalvar);
-
-        bar.add(esquerda, BorderLayout.WEST);
-        bar.add(lblStatus, BorderLayout.CENTER);
-        bar.add(direita, BorderLayout.EAST);
-        add(bar, BorderLayout.SOUTH);
-    }
-
-    // ----------------------------------------------------------------
-    // Lógica de transformação
-    // ----------------------------------------------------------------
-    private void aplicarTransformacao(java.util.function.UnaryOperator<BufferedImage> fn) {
-        if (!verificarImagem()) return;
-        executar("Processando imagem…", () -> session.apply(fn), image -> {
-            lblTransformedImg.setImagem(image);
-            atualizarStatus();
-        });
-    }
-
-    private BufferedImage imagemAtual() { return session.current(); }
-
-    private void desfazer() {
-        if (busy || !session.hasImage()) return;
-        lblTransformedImg.setImagem(session.undo());
-        atualizarStatus();
-    }
-
-    private void resetar() {
-        if (busy || !session.hasImage()) return;
-        lblTransformedImg.setImagem(session.reset());
-        atualizarStatus();
-    }
-
-    private void atualizarStatus() {
-        btnDesfazer.setEnabled(!busy && session.canUndo());
-        if (!session.hasImage()) { lblStatus.setText("Nenhuma imagem carregada"); return; }
         BufferedImage image = session.current();
-        lblStatus.setText(arquivoAberto + "  —  " + image.getWidth() + " × " + image.getHeight()
-                + " px  ·  " + session.historySize() + " operação(ões) disponíveis para desfazer");
+        String size = image.getWidth() + " × " + image.getHeight() + " px";
+        int count = session.historySize();
+        String history =
+                count == 1
+                        ? "1 operação disponível para desfazer"
+                        : count + " operações disponíveis para desfazer";
+        status.setText(size + "  ·  " + history);
+        status.getAccessibleContext()
+                .setAccessibleDescription(arquivoAberto + " · " + status.getText());
+        resultSize.setText(size);
+        originalSize.setText(
+                session.original().getWidth() + " × " + session.original().getHeight() + " px");
+        document.setText(arquivoAberto);
+        document.setToolTipText(arquivoAberto);
     }
 
-    private void executarAnalise(String title, java.util.function.Function<BufferedImage, AnalysisResult> analysis) {
-        if (!verificarImagem()) return;
+    private void applyTransform(UnaryOperator<BufferedImage> operation) {
+        if (busy || !session.hasImage()) return;
+        execute(
+                "Processando imagem…",
+                () -> session.apply(operation),
+                image -> {
+                    result.setImage(image);
+                    feedback.setVisible(false);
+                    updateState();
+                });
+    }
+
+    private void undo() {
+        if (busy || !session.hasImage()) return;
+        result.setImage(session.undo());
+        feedback.setVisible(false);
+        updateState();
+    }
+
+    private void reset() {
+        if (busy || !session.hasImage()) return;
+        result.setImage(session.reset());
+        feedback.setVisible(false);
+        updateState();
+    }
+
+    private void runAnalysis(String title, Function<BufferedImage, AnalysisResult> operation) {
+        if (busy || !session.hasImage()) return;
         BufferedImage image = session.current();
-        executar("Analisando imagem…", () -> analysis.apply(image), result -> {
-            atualizarStatus();
-            JOptionPane.showMessageDialog(this, result.summary(), title,
-                    result.status() == AnalysisResult.Status.IDENTIFIED
-                            ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
-        });
+        execute(
+                "Analisando imagem…",
+                () -> operation.apply(image),
+                analysis -> {
+                    String state =
+                            switch (analysis.status()) {
+                                case IDENTIFIED -> "Identificado";
+                                case INCONCLUSIVE -> "Inconclusivo";
+                                case NOT_FOUND -> "Não encontrado";
+                            };
+                    showFeedback(title, state, analysis.summary());
+                });
     }
 
-    private <T> void executar(String message, java.util.concurrent.Callable<T> work, java.util.function.Consumer<T> success) {
+    private <T> void execute(String message, Callable<T> work, Consumer<T> success) {
         if (busy) return;
         Window active = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
         if (active instanceof JDialog && active.getOwner() == this) active.dispose();
         busy = true;
-        enabledBeforeWork.clear();
-        habilitarDuranteTrabalho(getContentPane(), false);
-        habilitarDuranteTrabalho(getJMenuBar(), false);
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        lblStatus.setText(message);
+        updateState();
+        progress.setIndeterminate(true);
+        progress.getAccessibleContext().setAccessibleDescription(message);
+        status.setText(message);
         new SwingWorker<T, Void>() {
-            @Override protected T doInBackground() throws Exception { return work.call(); }
-            @Override protected void done() {
+            @Override
+            protected T doInBackground() throws Exception {
+                return work.call();
+            }
+
+            @Override
+            protected void done() {
+                T value = null;
+                Throwable failure = null;
+                try {
+                    value = get();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    failure = ex;
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    failure = ex.getCause();
+                }
                 busy = false;
-                enabledBeforeWork.forEach(Component::setEnabled);
-                enabledBeforeWork.clear();
-                setCursor(Cursor.getDefaultCursor());
-                atualizarStatus();
-                try { success.accept(get()); }
-                catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
-                catch (java.util.concurrent.ExecutionException ex) { mostrarErro(ex.getCause()); }
+                progress.setIndeterminate(false);
+                progress.setValue(0);
+                updateState();
+                if (failure != null) showError(failure);
+                else success.accept(value);
             }
         }.execute();
     }
 
-    private void habilitarDuranteTrabalho(Component component, boolean enabled) {
-        if (component instanceof AbstractButton || component instanceof JTextField || component instanceof JComboBox) {
-            enabledBeforeWork.put(component, component.isEnabled());
-            component.setEnabled(enabled);
-        }
-        if (component instanceof JMenu menu) {
-            for (Component child : menu.getMenuComponents()) habilitarDuranteTrabalho(child, enabled);
-        } else if (component instanceof Container container) {
-            for (Component child : container.getComponents()) habilitarDuranteTrabalho(child, enabled);
-        }
+    private void showFeedback(String title, String state, String text) {
+        feedbackTitle.setText(title);
+        feedbackState.setText(state);
+        feedbackText.setText(text);
+        feedbackText.setCaretPosition(0);
+        feedback.setVisible(true);
+        feedbackText.getAccessibleContext().setAccessibleDescription(state + ". " + text);
+        feedback.revalidate();
+        feedbackText.requestFocusInWindow();
+        repaint();
     }
 
-    private void mostrarErro(Throwable error) {
-        LOG.log(java.util.logging.Level.WARNING, "Falha na operação de imagem", error);
-        String message = error instanceof LinkageError ? "Não foi possível carregar o OpenCV para esta plataforma. Consulte o README."
-                : error.getMessage() == null ? "Não foi possível concluir a operação." : error.getMessage();
-        JOptionPane.showMessageDialog(this, message, "Erro", JOptionPane.ERROR_MESSAGE);
+    private void showError(Throwable error) {
+        LOG.log(Level.WARNING, "Falha na operação de imagem", error);
+        String message =
+                error instanceof LinkageError
+                        ? "Este recurso não está disponível nesta plataforma. Consulte o guia de"
+                                + " instalação."
+                        : error.getMessage();
+        showFeedback(
+                "Não foi possível concluir",
+                "Erro",
+                message == null
+                        ? "Tente novamente com outra imagem ou outros parâmetros."
+                        : message);
     }
 
-    private void abrirDialog(JPanel view, String titulo) {
-        if (!verificarImagem()) return;
-        JOptionPane.showMessageDialog(this, view, titulo, JOptionPane.PLAIN_MESSAGE);
-    }
-
-    /** Abre um dialog de extração sem verificar imagem (a View fará isso via callback) */
-    private void abrirDialogExtracao(JPanel view, String titulo) {
-        JOptionPane.showMessageDialog(this, view, titulo, JOptionPane.PLAIN_MESSAGE);
-    }
-
-    private boolean verificarImagem() {
-        if (busy) return false;
-        if (!session.hasImage()) {
-            JOptionPane.showMessageDialog(this, "Abra uma imagem primeiro.", "Sem imagem", JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-        return true;
-    }
-
-    private void abrirImagem() {
+    private void openImage() {
         if (busy) return;
-        FileDialog fd = new FileDialog(this, "Selecione a imagem", FileDialog.LOAD);
-        fd.setVisible(true);
-        if (fd.getFile() != null) carregarImagem(java.nio.file.Path.of(fd.getDirectory(), fd.getFile()));
-        fd.dispose();
+        FileDialog dialog = new FileDialog(this, "Abrir imagem", FileDialog.LOAD);
+        dialog.setVisible(true);
+        if (dialog.getFile() != null)
+            carregarImagem(Path.of(dialog.getDirectory(), dialog.getFile()));
+        dialog.dispose();
     }
 
-    public void carregarImagem(java.nio.file.Path path) {
-        executar("Carregando imagem…", () -> { session.load(imageFiles.read(path)); return session.current(); }, image -> {
-            arquivoAberto = path.getFileName().toString();
-            lblOriginalImg.setImagem(session.original());
-            lblTransformedImg.setImagem(session.current());
-            atualizarStatus();
-        });
+    public void carregarImagem(Path path) {
+        execute(
+                "Carregando imagem…",
+                () -> {
+                    session.load(imageFiles.read(path));
+                    return session.current();
+                },
+                image -> {
+                    arquivoAberto = path.getFileName().toString();
+                    original.setImage(session.original());
+                    result.setImage(image);
+                    feedback.setVisible(false);
+                    cards.show(canvasCards, "image");
+                    comparison.setDividerLocation(.5);
+                    updateState();
+                });
     }
 
-    private void salvarImagem() {
-        if (!verificarImagem()) return;
-        FileDialog fd = new FileDialog(this, "Salvar imagem", FileDialog.SAVE);
-        fd.setFile("resultado.png"); fd.setVisible(true);
-        if (fd.getFile() == null) { fd.dispose(); return; }
-        String name = fd.getFile().toLowerCase(java.util.Locale.ROOT).endsWith(".png") ? fd.getFile() : fd.getFile() + ".png";
-        java.nio.file.Path path = java.nio.file.Path.of(fd.getDirectory(), name);
-        fd.dispose();
-        if (java.nio.file.Files.exists(path) && JOptionPane.showConfirmDialog(this,
-                "Substituir o arquivo existente?", "Salvar imagem", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+    private void saveImage() {
+        if (busy || !session.hasImage()) return;
+        FileDialog dialog = new FileDialog(this, "Exportar PNG", FileDialog.SAVE);
+        dialog.setFile("resultado.png");
+        dialog.setVisible(true);
+        if (dialog.getFile() == null) {
+            dialog.dispose();
+            return;
+        }
+        String name =
+                dialog.getFile().toLowerCase(Locale.ROOT).endsWith(".png")
+                        ? dialog.getFile()
+                        : dialog.getFile() + ".png";
+        Path path = Path.of(dialog.getDirectory(), name);
+        dialog.dispose();
+        if (Files.exists(path)
+                && !Dialogs.confirm(
+                        this,
+                        "Substituir arquivo?",
+                        "Já existe um arquivo com esse nome. Substituí-lo remove a versão salva"
+                                + " anteriormente.",
+                        "Substituir arquivo")) return;
         BufferedImage image = session.current();
-        executar("Salvando imagem…", () -> { imageFiles.writePng(image, path); return path; },
-                saved -> JOptionPane.showMessageDialog(this, "Imagem salva com sucesso.", "Salvo", JOptionPane.INFORMATION_MESSAGE));
+        execute(
+                "Exportando imagem…",
+                () -> {
+                    imageFiles.writePng(image, path);
+                    return path;
+                },
+                saved ->
+                        showFeedback(
+                                "Imagem exportada",
+                                "PNG",
+                                saved.getFileName() + " foi salvo com sucesso."));
     }
 
-    private void configurarArrastarImagem() {
-        lblOriginalImg.setTransferHandler(new TransferHandler() {
-            @Override public boolean canImport(TransferSupport support) {
-                return !busy && support.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
-            }
-            @Override public boolean importData(TransferSupport support) {
-                if (!canImport(support)) return false;
-                try {
-                    java.util.List<?> files = (java.util.List<?>) support.getTransferable()
-                            .getTransferData(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
-                    if (files.isEmpty() || !(files.get(0) instanceof File file)) return false;
-                    carregarImagem(file.toPath());
-                    return true;
-                } catch (Exception ex) { mostrarErro(ex); return false; }
-            }
-        });
-    }
+    private void configureDrop() {
+        TransferHandler handler =
+                new TransferHandler() {
+                    @Override
+                    public boolean canImport(TransferSupport support) {
+                        return !busy
+                                && support.isDataFlavorSupported(
+                                        java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+                    }
 
-    private void mostrarSobre() {
-        JOptionPane.showMessageDialog(this,
-            "<html><div style='text-align:center'>Processamento Digital de Imagens<br>"
-            + "<small>Fernando Hubner Silva — v1.7</small></div></html>",
-            "Sobre", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    // ----------------------------------------------------------------
-    // Fábrica de componentes
-    // ----------------------------------------------------------------
-    private JMenu menuEstilizado(String nome) {
-        JMenu m = new JMenu(nome);
-        m.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        m.setForeground(COR_TEXTO_PRIMARIO);
-        return m;
-    }
-
-    private JMenuItem menuItem(String nome, java.awt.event.ActionListener al) {
-        JMenuItem item = new JMenuItem(nome);
-        item.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        item.addActionListener(al);
-        return item;
-    }
-
-    private JButton statusBotao(String nome) {
-        JButton btn = new JButton(nome);
-        btn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        btn.setForeground(COR_TEXTO_PRIMARIO);
-        btn.setBackground(COR_BG_PRIMARIO);
-        btn.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(COR_BORDA, 1), new EmptyBorder(2,10,2,10)));
-        btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent e) { btn.setBackground(COR_BG_SECUNDARIO); }
-            public void mouseExited (java.awt.event.MouseEvent e) { btn.setBackground(COR_BG_PRIMARIO); }
-        });
-        return btn;
+                    @Override
+                    public boolean importData(TransferSupport support) {
+                        if (!canImport(support)) return false;
+                        try {
+                            List<?> files =
+                                    (List<?>)
+                                            support.getTransferable()
+                                                    .getTransferData(
+                                                            java.awt.datatransfer.DataFlavor
+                                                                    .javaFileListFlavor);
+                            if (files.isEmpty() || !(files.get(0) instanceof File file))
+                                return false;
+                            carregarImagem(file.toPath());
+                            return true;
+                        } catch (Exception ex) {
+                            showError(ex);
+                            return false;
+                        }
+                    }
+                };
+        original.setTransferHandler(handler);
+        canvasCards.setTransferHandler(handler);
+        ((JPanel) canvasCards.getComponent(0)).setTransferHandler(handler);
     }
 
     public static void main(String[] args) {
-
-
-        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
-        SwingUtilities.invokeLater(() -> new Painel().setVisible(true));
+        SwingUtilities.invokeLater(
+                () -> {
+                    Theme.install();
+                    new Painel().setVisible(true);
+                });
     }
 }

@@ -1,46 +1,25 @@
 package src.filtros;
 
-import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import java.awt.*;
+import src.ui.ParameterForm;
+
 import java.util.function.Consumer;
 
-public class LimiarizacaoView extends JPanel {
-    private JSlider slider;
-    private JLabel labelValorLimiar;
+import javax.swing.*;
 
-    public LimiarizacaoView(Consumer<Integer> onApply) {
-        setLayout(new BorderLayout());
-
-        // Criação do JSlider para ajustar o limiar
-        slider = new JSlider(JSlider.HORIZONTAL, 0, 255, 128); // Limiar inicial em 128
+public class LimiarizacaoView extends ParameterForm {
+    public LimiarizacaoView(Consumer<Integer> callback) {
+        super("Separe a imagem em áreas claras e escuras a partir de um limiar.");
+        JSlider slider = new JSlider(0, 255, 128);
+        slider.setName("parameter.slider");
         slider.setMajorTickSpacing(50);
-        slider.setMinorTickSpacing(10);
         slider.setPaintTicks(true);
         slider.setPaintLabels(true);
-
-        // Label que exibirá o valor atual do limiar
-        labelValorLimiar = new JLabel("Valor atual: 128", JLabel.CENTER);
-        slider.addChangeListener(new ChangeListener() {
-            @Override
-            public void stateChanged(ChangeEvent e) {
-                // Atualiza o valor mostrado no JLabel conforme o slider é movido
-                int valorLimiar = slider.getValue();
-                labelValorLimiar.setText("Valor atual: " + valorLimiar);
-            }
-        });
-
-        // Botão para aplicar o limiar selecionado
-        JButton aplicarButton = new JButton("Aplicar Limiar");
-        aplicarButton.addActionListener(e -> {
-            int valorLimiar = slider.getValue();
-            onApply.accept(valorLimiar);
-        });
-
-        // Adiciona o slider, o label e o botão ao painel
-        add(slider, BorderLayout.CENTER);
-        add(labelValorLimiar, BorderLayout.NORTH); // Label acima do slider
-        add(aplicarButton, BorderLayout.SOUTH); // Botão abaixo do slider
+        JLabel value = new JLabel();
+        Runnable update = () -> value.setText(String.valueOf(slider.getValue()));
+        update.run();
+        slider.addChangeListener(e -> update.run());
+        field("Limiar", slider, null);
+        field("Valor atual", value, null);
+        submit("Aplicar", () -> callback.accept(slider.getValue()));
     }
 }

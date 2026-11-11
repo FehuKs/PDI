@@ -1,14 +1,12 @@
 package src.filtros;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class BordasdeSobelView extends JPanel {
-
+public class BordasdeSobelView extends ActionForm {
     public BordasdeSobelView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Filtro de Bordas Sobel");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super(
+                "Realce variações de intensidade para visualizar os contornos.",
+                "Aplicar Sobel",
+                callback);
     }
 }

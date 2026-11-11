@@ -1,14 +1,9 @@
 package src.filtros;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class RobinsonView extends JPanel {
-
+public class RobinsonView extends ActionForm {
     public RobinsonView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Filtro Robinson");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super("Visualize contornos em diferentes direções.", "Aplicar Robinson", callback);
     }
 }

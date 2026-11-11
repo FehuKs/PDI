@@ -1,15 +1,9 @@
 package src.morfologia;
 
+import src.ui.ActionForm;
 
-import javax.swing.*;
-import java.awt.*;
-
-public class Aberturaview extends JPanel {
-
+public class Aberturaview extends ActionForm {
     public Aberturaview(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Abertura");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super("Aplique erosão seguida de dilatação.", "Aplicar abertura", callback);
     }
 }

@@ -1,49 +1,24 @@
 package src.transformacoes;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import src.ui.ParameterForm;
+
 import java.util.function.Consumer;
-import javax.swing.BorderFactory;
-import javax.swing.JCheckBox;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
 
-public class EspelhamentoView extends JPanel {
+import javax.swing.*;
 
-    private boolean horizontal;
-    private boolean vertical;
-
+public class EspelhamentoView extends ParameterForm {
     public EspelhamentoView(Consumer<boolean[]> callback) {
-        super();
-        setBorder(BorderFactory.createTitledBorder("Espelhamento"));
-
-        JCheckBox chkHorizontal = new JCheckBox("Horizontal");
-        JCheckBox chkVertical = new JCheckBox("Vertical");
-
-        chkHorizontal.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                horizontal = chkHorizontal.isSelected();
-            }
-        });
-
-        chkVertical.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                vertical = chkVertical.isSelected();
-            }
-        });
-
-        JButton aplicar = new JButton("Aplicar");
-        aplicar.addActionListener((e) -> {
-            boolean[] params = { horizontal, vertical };
-            callback.accept(params);
-        });
-
-        add(new JLabel("Escolha o tipo de espelhamento:"));
-        add(chkHorizontal);
-        add(chkVertical);
-        add(aplicar);
+        super("Inverta a imagem em um eixo ou nos dois ao mesmo tempo.");
+        JCheckBox horizontal = new JCheckBox("Espelhar na horizontal");
+        JCheckBox vertical = new JCheckBox("Espelhar na vertical");
+        horizontal.setMnemonic('H');
+        vertical.setMnemonic('V');
+        field("Eixos", horizontal, null);
+        field("", vertical, null);
+        submit(
+                "Espelhar",
+                () ->
+                        callback.accept(
+                                new boolean[] {horizontal.isSelected(), vertical.isSelected()}));
     }
 }

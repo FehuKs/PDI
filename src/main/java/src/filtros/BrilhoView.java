@@ -1,13 +1,18 @@
 package src.filtros;
-import javax.swing.*;
+
+import src.ui.Inputs;
+import src.ui.ParameterForm;
+
 import java.util.function.Consumer;
 
-public class BrilhoView extends JPanel {
+import javax.swing.JTextField;
+
+public class BrilhoView extends ParameterForm {
     public BrilhoView(Consumer<Integer> callback) {
-        setBorder(BorderFactory.createTitledBorder("Brilho"));
-        JTextField value = new JTextField("0", 7);
-        JButton apply = new JButton("Aplicar");
-        apply.addActionListener(e -> src.ui.Inputs.apply(this, () -> callback.accept(src.ui.Inputs.integer(value.getText(), -255, 255))));
-        add(new JLabel("Brilho (-255 a 255)")); add(value); add(apply);
+        super("Ajuste a luminosidade da imagem. O valor zero mantém o brilho atual.");
+        JTextField value = new JTextField("0");
+        value.setName("parameter.value");
+        field("Intensidade", value, "De −255 a 255. Valores negativos escurecem a imagem.");
+        submit("Aplicar", () -> callback.accept(Inputs.integer(value.getText(), -255, 255)));
     }
 }

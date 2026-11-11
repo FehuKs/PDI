@@ -43,13 +43,13 @@ O ambiente preparado usa JDK e caches em `/workspace/pdi-environment`. O helper 
 
 ## Demonstração
 
-1. Abra `examples/quadrado-vermelho.png` e aplique **Filtros → Grayscale**.
-2. Use **Desfazer** e **Resetar**. Exporte o resultado por **Salvar imagem**.
+1. Abra `examples/quadrado-vermelho.png` e aplique **Filtros → Escala de cinza**.
+2. Use **Desfazer** e **Resetar**. Exporte o resultado por **Exportar PNG**.
 3. Abra os exemplos abaixo e escolha o exercício correspondente.
 
 | Arquivo | Exercício | Resultado esperado |
 |---|---|---|
-| `examples/formas.png` | Contar objetos coloridos | Um quadrado vermelho, um círculo amarelo, um retângulo verde e um triângulo azul |
+| `examples/formas.png` | Contar objetos | Um quadrado vermelho, um círculo amarelo, um retângulo verde e um triângulo azul |
 | `examples/letras.png` | Reconhecer letras | `A, B, C, D` |
 | `examples/relogio-3.png` | Ler relógio | `03:00` |
 | `examples/relogio-6.png` | Ler relógio | `06:00` |
@@ -67,6 +67,30 @@ As imagens são sintéticas e geradas pelo próprio projeto. Para regenerá-las:
 
 Os resultados desses exemplos são verificados por `ExamplesTest`. Eles não representam uma avaliação de precisão em fotografias reais.
 
+## Interface e navegação
+
+A área de trabalho usa uma barra lateral com cinco categorias: Transformar, Filtros, Morfologia, Afinamento e Analisar. As mesmas 23 ferramentas continuam disponíveis nos menus. Os exercícios sem parâmetros executam diretamente e exibem o resultado na área de trabalho, onde o texto pode ser selecionado e copiado.
+
+- **Abrir imagem** e **Exportar PNG** ficam no cabeçalho.
+- **Desfazer** e **Resetar** ficam junto à comparação.
+- A lateral recolhe automaticamente abaixo de 1020 px; os ícones abrem os grupos de ferramentas. Também é possível recolher ou expandir manualmente.
+- A comparação se adapta à área útil: lado a lado em janelas largas ou baixas; empilhada quando a área é estreita e há altura suficiente.
+- **Ajustar à área** alterna para **Tamanho real · 100%**, com rolagem, sem alterar os pixels da imagem.
+- Parâmetros são validados no próprio formulário. Enter aplica, Esc ou Cancelar fecha sem aplicar.
+- Resultados, erros e confirmação de exportação aparecem em um painel discreto abaixo da comparação; Esc o fecha.
+
+| Atalho | Ação |
+|---|---|
+| Ctrl+O | Abrir imagem |
+| Ctrl+S | Exportar PNG |
+| Ctrl+Z | Desfazer |
+| Ctrl+Shift+R | Resetar |
+| Ctrl+B | Recolher/expandir ferramentas |
+| Ctrl+0 | Ajustar imagem à área |
+| F1 | Sobre o projeto |
+
+No macOS, os atalhos usam Cmd. A navegação com Tab, os menus com Alt no desktop e os controles padrão de sliders/seletores foram preservados. O [design system](docs/design-system.md) documenta tokens, componentes, decisões e limites da validação.
+
 ## Testes e CI
 
 ```bash
@@ -80,7 +104,7 @@ Os resultados desses exemplos são verificados por `ExamplesTest`. Eles não rep
 xvfb-run -a ./mvnw -Pdesktop verify
 ```
 
-O perfil padrão é headless e omite o teste da janela. O perfil `desktop` executa esse teste, que carrega uma imagem, aplica grayscale, desfaz e reseta. Os relatórios ficam em `target/surefire-reports/`.
+O perfil padrão é headless e omite os testes que abrem janelas. O perfil `desktop` também valida a edição, navegação, parâmetros, teclado, arrastar arquivos e comportamento responsivo. Os relatórios ficam em `target/surefire-reports/`.
 
 A [CI](.github/workflows/ci.yml) executa build e testes com Java 17/21 e o teste desktop com Xvfb em Java 21. A configuração de CI não comprova uma execução remota bem-sucedida; consulte os resultados do GitHub Actions.
 
@@ -88,7 +112,8 @@ A [CI](.github/workflows/ci.yml) executa build e testes com Java 17/21 e o teste
 
 | Componente | Responsabilidade |
 |---|---|
-| `src.Painel` | Interface Swing e coordenação de um único `SwingWorker` por vez |
+| `src.Painel` | Interface Swing, catálogo de ações compartilhadas e coordenação de um único `SwingWorker` por vez |
+| `ui` | Tokens visuais, botões, navegação, formulários, diálogos e visualização de imagem |
 | `core.EditorSession` | Original, resultado, histórico e alterações atômicas de estado |
 | `core.AnalysisResult` | Estado tipado: identificado, inconclusivo ou não encontrado; resumo e detalhes |
 | `filtros`, `transformacoes`, `morfologia`, `afinamento` | Algoritmos independentes da interface |

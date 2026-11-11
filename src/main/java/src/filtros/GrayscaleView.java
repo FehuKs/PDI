@@ -1,16 +1,9 @@
 package src.filtros;
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class GrayscaleView extends JPanel {
-
+public class GrayscaleView extends ActionForm {
     public GrayscaleView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JLabel label = new JLabel("Aplicar Filtro Grayscale", SwingConstants.CENTER);
-        add(label, BorderLayout.NORTH);
-        JButton btn = new JButton("Aplicar");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.SOUTH);
+        super("Converta as cores em tons de cinza.", "Aplicar escala de cinza", callback);
     }
 }

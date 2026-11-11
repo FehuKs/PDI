@@ -1,17 +1,12 @@
 package src.desafio;
-  
 
-import javax.swing.*;
-import java.awt.*;
+import src.ui.ActionForm;
 
-public class ContadorObjetosView extends JPanel {
-
+public class ContadorObjetosView extends ActionForm {
     public ContadorObjetosView(Runnable callback) {
-        setLayout(new BorderLayout());
-        JButton btn = new JButton("Aplicar Contador Objetos");
-        btn.addActionListener(e -> callback.run());
-        add(btn, BorderLayout.CENTER);
+        super(
+                "Conte formas separadas nas cores vermelho, amarelo, verde e azul.",
+                "Contar objetos",
+                callback);
     }
 }
-    
-

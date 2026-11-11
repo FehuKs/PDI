@@ -19,7 +19,7 @@ jobs:
         run: ./mvnw --batch-mode --no-transfer-progress verify
       - name: Desktop integration
         if: matrix.java == '21'
-        run: xvfb-run -a ./mvnw --batch-mode --no-transfer-progress -Pdesktop -Dtest=PainelTest test
+        run: xvfb-run -a ./mvnw --batch-mode --no-transfer-progress -Pdesktop -Dtest=PainelTest,DialogsDesktopTest test
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v4

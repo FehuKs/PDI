@@ -1,13 +1,26 @@
 package src.transformacoes;
-import javax.swing.*;
+
+import src.ui.*;
+
 import java.util.function.Consumer;
 
-public class TransladarView extends JPanel {
+import javax.swing.JTextField;
+
+public class TransladarView extends ParameterForm {
     public TransladarView(Consumer<int[]> callback) {
-        JTextField x = new JTextField("0", 6), y = new JTextField("0", 6);
-        JButton apply = new JButton("Aplicar");
-        apply.addActionListener(e -> src.ui.Inputs.apply(this, () -> callback.accept(new int[]{
-            src.ui.Inputs.integer(x.getText(), -16000000, 16000000), src.ui.Inputs.integer(y.getText(), -16000000, 16000000)})));
-        add(new JLabel("Deslocamento X")); add(x); add(new JLabel("Deslocamento Y")); add(y); add(apply);
+        super("Desloque a imagem na área atual. Partes fora dos limites serão cortadas.");
+        JTextField x = new JTextField("0"), y = new JTextField("0");
+        x.setName("parameter.x");
+        y.setName("parameter.y");
+        field("Horizontal", x, "Pixels. Positivo para a direita; negativo para a esquerda.");
+        field("Vertical", y, "Pixels. Positivo para baixo; negativo para cima.");
+        submit(
+                "Transladar",
+                () ->
+                        callback.accept(
+                                new int[] {
+                                    Inputs.integer(x.getText(), -16000000, 16000000),
+                                    Inputs.integer(y.getText(), -16000000, 16000000)
+                                }));
     }
 }

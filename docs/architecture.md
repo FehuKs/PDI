@@ -41,3 +41,11 @@ A IoU de glifos compara pixels de primeiro plano. Os limiares atuais (letras 0,7
 O contador combina preenchimento da bounding box, circularidade e aspecto. A restrição de preenchimento evita classificar o quadrado de regressão como círculo. Esses descritores ainda têm limitações para formas rotacionadas, tocantes e irregulares.
 
 O relógio separa raios quando um segmento de Hough atravessa dois ponteiros opostos. A análise de barras aceita zero como leitura válida e usa ausência explícita para rótulos desconhecidos. A classificação de placas verifica geometria do candidato antes das regras de preenchimento vermelho e linhas internas; isso não substitui um classificador geral.
+
+## Apresentação e design system
+
+`Theme` concentra cores, tipografia, espaçamentos e limites responsivos. `AppButton`, `ParameterForm`, `Dialogs`, `ToolSidebar` e `ImageCanvas` padronizam a apresentação sem dependências adicionais. As fontes são do sistema e os ícones são desenhados como vetores Java2D.
+
+Um catálogo de `Action` compartilha os mesmos callbacks e estados de habilitação entre menus, lateral e atalhos. A seleção de categoria só altera a apresentação; uma operação em andamento continua impedindo alterações concorrentes. A lateral e o zoom podem ser usados durante o processamento porque não modificam a imagem.
+
+As análises sem parâmetros executam diretamente e apresentam `AnalysisResult` inline. Formulários mantêm as assinaturas de callbacks anteriores e mostram validação local; cada diálogo tem uma ação principal, Cancelar e suporte a Enter/Esc. O zoom pertence exclusivamente à visualização. Nenhum algoritmo, regra de classificação, limite de arquivo ou estado da sessão foi modificado pelo redesign.

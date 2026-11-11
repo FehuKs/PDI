@@ -1,13 +1,25 @@
 package src.filtros;
-import javax.swing.*;
+
+import src.ui.*;
+
 import java.util.function.BiConsumer;
 
-public class Marrhildrethview extends JPanel {
+import javax.swing.JTextField;
+
+public class Marrhildrethview extends ParameterForm {
     public Marrhildrethview(BiConsumer<Double, Integer> callback) {
-        JTextField sigma = new JTextField("1.4", 5), threshold = new JTextField("15", 5);
-        JButton apply = new JButton("Aplicar");
-        apply.addActionListener(e -> src.ui.Inputs.apply(this, () -> callback.accept(
-            src.ui.Inputs.decimal(sigma.getText(), 0.1, 5), src.ui.Inputs.integer(threshold.getText(), 0, 2040))));
-        add(new JLabel("Sigma (0,1 a 5)")); add(sigma); add(new JLabel("T (0 a 2040)")); add(threshold); add(apply);
+        super("Detecte contornos com suavização prévia. Ajustes maiores podem levar mais tempo.");
+        JTextField sigma = new JTextField("1.4"), threshold = new JTextField("15");
+        field("Suavização (sigma)", sigma, "De 0,1 a 5. Um valor maior suaviza mais detalhes.");
+        field(
+                "Limiar dos contornos",
+                threshold,
+                "De 0 a 2040. Aumente para descartar mudanças mais fracas.");
+        submit(
+                "Detectar contornos",
+                () ->
+                        callback.accept(
+                                Inputs.decimal(sigma.getText(), 0.1, 5),
+                                Inputs.integer(threshold.getText(), 0, 2040)));
     }
 }
