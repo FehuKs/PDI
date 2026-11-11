@@ -1,5 +1,17 @@
 # Validação e limites da evidência
 
+## Portabilidade da leitura de dígitos na CI
+
+Os logs da execução do commit `22df7da` confirmaram uma falha em `ExamplesTest`: `examples/barras.png` deveria produzir `Maior = 20 | Menor = 10`, mas retornava `Maior = 20 | Menor = 40`, com Java 17 e 21. As 15 imagens da professora passavam nessa mesma execução.
+
+A leitura incorreta foi reproduzida ao restringir as fontes locais com Fontconfig. Referências binárias de dígitos geradas de fontes, independentes das imagens de teste, agora complementam os templates locais. O teste conserva o resultado esperado 10; o limiar de similaridade continua em 0,55.
+
+A CI também executa `ExamplesTest` com [uma configuração alternativa de fontes](../.github/fontconfig-dejavu.conf). Para reproduzir em Linux com DejaVu instalado:
+
+```bash
+FONTCONFIG_FILE="$PWD/.github/fontconfig-dejavu.conf" ./mvnw -Dtest=ExamplesTest test
+```
+
 A suíte contém testes de regressão para alfa, imagens cinza uniformes, rotação de marcadores, escala, morfologia, afinamento, histórico e arquivos. Exercita também recursos nativos, entradas numéricas inválidas e os exemplos versionados.
 
 Os testes de reconhecimento verificam as quatro formas nas quatro cores, letras A–Z renderizadas na mesma família de fonte dos templates, candidatos sintéticos de Pare/velocidade máxima, imagens vazias, entradas desconhecidas, gráficos com e sem rótulos, valor zero e relógios de 03:00/06:00.

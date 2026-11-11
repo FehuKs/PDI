@@ -17,6 +17,10 @@ jobs:
           cache: maven
       - name: Build and headless tests
         run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Examples with an alternate font configuration
+        env:
+          FONTCONFIG_FILE: ${{ github.workspace }}/.github/fontconfig-dejavu.conf
+        run: ./mvnw --batch-mode --no-transfer-progress -Dtest=ExamplesTest test
       - name: Desktop integration
         if: matrix.java == '21'
         run: xvfb-run -a ./mvnw --batch-mode --no-transfer-progress -Pdesktop -Dtest=PainelTest,DialogsDesktopTest test

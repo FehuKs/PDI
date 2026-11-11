@@ -12,8 +12,14 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Properties;
+import java.util.TreeSet;
 
 /** Font-derived templates; caches Java bytes, never native matrices or input images. */
 final class GlyphTemplates {
@@ -24,15 +30,26 @@ final class GlyphTemplates {
 
     static GlyphTemplates letters(int size, int margin) {
         return new GlyphTemplates(
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZ", size, margin, new int[] {Font.BOLD}, true);
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ", size, margin, new int[] {Font.BOLD}, true, List.of());
     }
 
     static GlyphTemplates digits(int size, int margin) {
         return new GlyphTemplates(
-                "0123456789", size, margin, new int[] {Font.PLAIN, Font.BOLD}, false);
+                "0123456789",
+                size,
+                margin,
+                new int[] {Font.PLAIN, Font.BOLD},
+                false,
+                digitReferences(size, margin));
     }
 
-    private GlyphTemplates(String alphabet, int size, int margin, int[] styles, boolean heavy) {
+    private GlyphTemplates(
+            String alphabet,
+            int size,
+            int margin,
+            int[] styles,
+            boolean heavy,
+            List<Template> references) {
         this.size = size;
         List<Template> generated = new ArrayList<>();
         Mat stroke =
@@ -50,7 +67,37 @@ final class GlyphTemplates {
                 }
             }
         }
+        generated.addAll(references);
         templates = List.copyOf(generated);
+    }
+
+    private static List<Template> digitReferences(int size, int margin) {
+        Properties properties = new Properties();
+        try (InputStream input =
+                GlyphTemplates.class.getResourceAsStream("digit-templates.properties")) {
+            if (input == null) throw new IllegalStateException("Referências de dígitos ausentes.");
+            properties.load(input);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Não foi possível ler as referências de dígitos.", exception);
+        }
+        if (Integer.parseInt(properties.getProperty("size")) != size
+                || Integer.parseInt(properties.getProperty("margin")) != margin) {
+            throw new IllegalArgumentException(
+                    "Referências de dígitos com dimensões incompatíveis.");
+        }
+        List<Template> references = new ArrayList<>();
+        for (String key : new TreeSet<>(properties.stringPropertyNames())) {
+            if (!key.startsWith("glyph.")) continue;
+            BitSet mask = BitSet.valueOf(HexFormat.of().parseHex(properties.getProperty(key)));
+            if (mask.length() > size * size) {
+                throw new IllegalStateException("Máscara de dígito excede suas dimensões.");
+            }
+            byte[] pixels = new byte[size * size];
+            mask.stream().forEach(index -> pixels[index] = (byte) 255);
+            references.add(new Template(key.charAt(6), pixels));
+        }
+        return references;
     }
 
     char classify(Mat glyph, double minimumScore) {
